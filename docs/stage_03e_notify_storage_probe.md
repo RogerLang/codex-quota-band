@@ -49,6 +49,8 @@ Stage 03E must remain strictly inside these limits:
    or `/data/app/notifications`.
 6. Do not use root, LSPosed, Gadgetbridge, Notify for Xiaomi, or BLE takeover.
 7. Do not send Codex/OpenAI credentials, prompts, task content, or real quota data during this probe.
+8. Keep the probe I/O bounded: only database tail windows and a small capped set of notification files are
+   scanned, at a low cadence, for a finite probe window.
 
 ## Synthetic markers
 
@@ -59,15 +61,17 @@ Title: CQNOTIFY-47-A9F3
 Body:  SEQ47-WEEK38-RUN2
 ```
 
-The watchface searches for those exact byte strings in:
+The watchface searches for those exact byte strings in bounded read-only windows:
 
 ```text
-/data/persist.db
-/data/persist.db.bk
-/data/app/notifications/**/*
+/data/persist.db                 -> last 512 KiB only
+/data/persist.db.bk              -> last 512 KiB only
+/data/app/notifications/**/*     -> max 16 files, max 128 KiB/file
 ```
 
 The directory scan is best-effort. If `io.popen` is unavailable, the fixed database checks still run.
+The probe scans immediately, then at most every 15 seconds, and stops after 12 scans (about 3 minutes) or
+after `FOUND BOTH`.
 
 ## Build artifacts
 
@@ -86,13 +90,20 @@ Band 9 Pro probes. The watchface uses EasyFace device type `367` and 336x480 Lua
 ## Real-device procedure
 
 1. Build the validation APK and Stage 03E `.face` only.
-2. Install the `.face` and select it as the current watchface.
-3. Install/update the Stage 03E validation APK on the Android phone.
-4. Do not open any previous probe RPK during this test.
-5. In the Android validation app, press `发送测试通知` once.
-6. Confirm whether the Band 9 Pro receives and vibrates for the synthetic notification.
-7. Return to the Stage 03E watchface and wait at least one 5-second scan cycle.
-8. Record the watchface result and copy the Android sanitized report.
+2. Remove or avoid opening any old Stage 03C/03D experimental RPK; Stage 03E does not need an RPK.
+3. Install the Stage 03E `.face` and select it as the current watchface.
+4. Confirm the face renders normally and shows an initial probe status; if it stalls or makes the band
+   unstable, stop immediately and restore a known-good watchface.
+5. Install/update the Stage 03E validation APK on the Android phone.
+6. Within about 30 seconds of selecting the watchface, press `发送测试通知` once.
+7. Confirm whether the Band 9 Pro receives and vibrates for the synthetic notification.
+8. Dismiss the notification overlay if necessary and return to the Stage 03E watchface.
+9. Wait up to 45 seconds (three 15-second scan cycles) and record the watchface result. If still
+   `NOT FOUND`, it is acceptable to leave the face selected until the bounded scan window ends, but do not
+   keep restarting the probe repeatedly.
+10. Copy the Android sanitized report.
+11. After recording the result, restore the user's normal watchface; Stage 03E is a diagnostic probe, not
+    a daily-use face.
 
 If the band becomes unstable, reboots unexpectedly, or the watchface repeatedly stalls, stop the probe
 and restore a known-good watchface before any further experiment.
@@ -103,7 +114,7 @@ and restore a known-good watchface before any further experiment.
 | --- | --- | --- |
 | yes | `FOUND BOTH` | Positive evidence that both synthetic notification fields are readable through the tested system-storage route. |
 | yes | `PARTIAL` | One field is visible; promising but insufficient for a reliable quota payload bridge. |
-| yes | `NOT FOUND` + sources readable | Negative result for these candidate paths / clear-text representation only. |
+| yes | `NOT FOUND` + sources readable | Negative result for these candidate paths / bounded clear-text representation only. |
 | yes | sources unreadable | Inconclusive: notification delivery works, but Lua cannot read the tested storage. |
 | no | any | Inconclusive for storage; first diagnose NotifyApi delivery / permission / connection. |
 
