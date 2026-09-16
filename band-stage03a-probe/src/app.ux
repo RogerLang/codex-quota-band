@@ -7,7 +7,7 @@ import stage03 from './common/stage03-state.cjs'
 const connection = interconnect.instance()
 const SEQUENCE_URI = 'internal://files/watchface_sequence.txt'
 const STATE_URI = 'internal://files/watchface_state.json'
-const AUTO_RETURN_DELAY_MS = 120
+const AUTO_RETURN_DELAY_MS = 350
 
 function rawMessage(event) {
   return event && event.data !== undefined ? event.data : event
@@ -21,12 +21,11 @@ function returnToWatchfaceSoon() {
 
 function sendAck(message, persisted) {
   try {
-    connection.send({
-      data: stage03.createAck(message, persisted),
-      success: returnToWatchfaceSoon,
-      fail: () => {},
-    })
+    connection.send({ data: stage03.createAck(message, persisted) })
   } catch (_) {}
+  // Do not depend on a send success callback. Stage 03B already proved the ACK path works;
+  // Stage 03D only asks whether terminating shortly after the write returns to the watchface.
+  returnToWatchfaceSoon()
 }
 
 function persist(message) {
