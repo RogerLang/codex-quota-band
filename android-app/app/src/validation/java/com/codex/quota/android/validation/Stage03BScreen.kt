@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.codex.quota.android.ui.CodexTokens
 import kotlinx.coroutines.launch
 
@@ -56,7 +57,7 @@ internal fun Stage03BScreen(copyReport: (String) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(CodexTokens.Radius.Card),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = .94f)),
-        border = BorderStroke(CodexTokens.Stroke.Hairline, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f)),
       ) {
         Column(Modifier.padding(CodexTokens.Space.Lg)) {
           Text("测试前", fontSize = CodexTokens.Type.SectionTitle, fontWeight = FontWeight.SemiBold)
