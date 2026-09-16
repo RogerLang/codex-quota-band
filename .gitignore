@@ -21,6 +21,7 @@ latest*.yml
 *.msi
 *.abp
 *.rpk
+*.face
 
 # Local configuration, credentials, logs and diagnostics
 .env

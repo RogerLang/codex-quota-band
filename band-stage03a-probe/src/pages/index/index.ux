@@ -1,0 +1,60 @@
+<template>
+  <div class="page">
+    <text class="title">CodexQuota</text>
+    <text class="subtitle">Stage 03A Probe</text>
+    <text class="label">Last persisted sequence</text>
+    <text class="sequence">{{sequenceText}}</text>
+    <text class="status">{{statusText}}</text>
+    <text class="hint">打开一次后请返回真表盘。发送 43 时不要重新打开此 Probe。</text>
+  </div>
+</template>
+
+<script>
+import file from '@system.file'
+
+const SEQUENCE_URI = 'internal://files/watchface_sequence.txt'
+
+export default {
+  private: { sequenceText: '--', statusText: '等待状态...', timer: null, destroyed: false },
+  onShow() {
+    this.destroyed = false
+    this.refresh()
+    this.stopTimer()
+    this.timer = setInterval(() => { if (!this.destroyed) this.refresh() }, 1000)
+  },
+  onHide() { this.stopTimer() },
+  onDestroy() { this.destroyed = true; this.stopTimer() },
+  stopTimer() { if (this.timer) clearInterval(this.timer); this.timer = null },
+  refresh() {
+    file.readText({
+      uri: SEQUENCE_URI,
+      success: (data) => {
+        if (this.destroyed) return
+        const value = String(data && data.text || '').trim()
+        if (/^\d{1,6}$/.test(value)) {
+          this.sequenceText = value
+          this.statusText = '文件已写入'
+        } else {
+          this.sequenceText = '--'
+          this.statusText = '文件内容无效'
+        }
+      },
+      fail: (_, code) => {
+        if (this.destroyed) return
+        this.sequenceText = '--'
+        this.statusText = code === 301 ? '尚未收到状态' : '读取失败'
+      }
+    })
+  }
+}
+</script>
+
+<style>
+.page { width:336px;height:480px;background-color:#050708;position:relative; }
+.title { position:absolute;top:42px;left:28px;width:280px;height:40px;color:#f5f7f8;font-size:30px;font-weight:bold;text-align:center; }
+.subtitle { position:absolute;top:88px;left:28px;width:280px;height:30px;color:#8ea0a8;font-size:20px;text-align:center; }
+.label { position:absolute;top:158px;left:28px;width:280px;height:30px;color:#b5c0c5;font-size:19px;text-align:center; }
+.sequence { position:absolute;top:198px;left:28px;width:280px;height:108px;color:#5fd3b3;font-size:92px;font-weight:bold;text-align:center; }
+.status { position:absolute;top:318px;left:28px;width:280px;height:30px;color:#f5f7f8;font-size:20px;text-align:center; }
+.hint { position:absolute;top:382px;left:35px;width:266px;height:70px;color:#87959b;font-size:17px;text-align:center; }
+</style>

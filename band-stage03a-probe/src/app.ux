@@ -1,0 +1,55 @@
+<script>
+import interconnect from '@system.interconnect'
+import file from '@system.file'
+import stage03 from './common/stage03-state.cjs'
+
+const connection = interconnect.instance()
+const SEQUENCE_URI = 'internal://files/watchface_sequence.txt'
+const STATE_URI = 'internal://files/watchface_state.json'
+
+function rawMessage(event) {
+  return event && event.data !== undefined ? event.data : event
+}
+
+function sendAck(message, persisted) {
+  try { connection.send({ data: stage03.createAck(message, persisted) }) } catch (_) {}
+}
+
+function persist(message) {
+  const updatedAt = Date.now()
+  file.writeText({
+    uri: STATE_URI,
+    text: stage03.persistedState(message, updatedAt),
+    append: false,
+    success: () => {
+      file.writeText({
+        uri: SEQUENCE_URI,
+        text: String(message.sequence),
+        append: false,
+        success: () => sendAck(message, true),
+        fail: () => sendAck(message, false),
+      })
+    },
+    fail: () => sendAck(message, false),
+  })
+}
+
+function installStage03Handler() {
+  connection.onmessage = (event) => {
+    const message = stage03.parseState(rawMessage(event))
+    if (message) persist(message)
+  }
+}
+
+// Deliberately register at module load as well as onCreate. Stage 03A is testing whether the
+// wearable process can remain/wake sufficiently for interconnect delivery after its page is hidden.
+installStage03Handler()
+
+export default {
+  onCreate() { installStage03Handler() },
+  onDestroy() {
+    // Validation-only: do not clear the module-level handler here. If the runtime keeps the
+    // process alive after the page is hidden, clearing it would manufacture a false failure.
+  }
+}
+</script>

@@ -1,0 +1,19 @@
+{
+  "package": "io.github.rogerlang.codexquota.validation",
+  "name": "CodexQuota Stage 03A Probe",
+  "versionName": "0.6.5",
+  "versionCode": 607,
+  "minPlatformVersion": 1200,
+  "icon": "/common/logo.png",
+  "simulationVersion": "default",
+  "deviceTypeList": ["watch"],
+  "features": [
+    { "name": "system.interconnect" },
+    { "name": "system.file" }
+  ],
+  "config": { "logLevel": "log", "designWidth": 336 },
+  "router": {
+    "entry": "pages/index",
+    "pages": { "pages/index": { "component": "index" } }
+  }
+}
