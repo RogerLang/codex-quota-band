@@ -9,7 +9,8 @@
   "deviceTypeList": ["watch"],
   "features": [
     { "name": "system.interconnect" },
-    { "name": "system.file" }
+    { "name": "system.file" },
+    { "name": "system.app" }
   ],
   "config": { "logLevel": "log", "designWidth": 336 },
   "router": {
