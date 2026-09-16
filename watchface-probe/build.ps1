@@ -26,11 +26,12 @@ if ($actual -ne $pinned) { throw "Unexpected LuaDevTemplate revision: $actual" }
 New-Item -ItemType Directory -Path (Join-Path $work 'app\lua'),(Join-Path $work 'images') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $source 'app\lua\main.lua') -Destination (Join-Path $work 'app\lua\main.lua') -Force
 
-# Compiler.exe requires a 280x328 watchface preview thumbnail for DeviceType 367.
-# This is package metadata only; the actual Lua widget remains 336x480.
+# The pinned Compiler.exe reports a 230x328 preview requirement for this
+# DeviceType 367 project. This image is package metadata only; the actual
+# Lua widget remains 336x480.
 $preview = Join-Path $work 'images\preview.png'
 Add-Type -AssemblyName System.Drawing
-$bitmap = New-Object System.Drawing.Bitmap 280,328
+$bitmap = New-Object System.Drawing.Bitmap 230,328
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 try {
   $graphics.Clear([System.Drawing.Color]::Black)
@@ -39,9 +40,9 @@ try {
   $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
   $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(114,214,166))
   try {
-    $graphics.DrawString('CodexQuota', $fontTitle, $white, 73, 92)
-    $graphics.DrawString('Stage 03A Probe', $fontBody, $green, 82, 132)
-    $graphics.DrawString('SEQ 42 -> 43', $fontBody, $white, 90, 174)
+    $graphics.DrawString('CodexQuota', $fontTitle, $white, 48, 92)
+    $graphics.DrawString('Stage 03A Probe', $fontBody, $green, 49, 132)
+    $graphics.DrawString('SEQ 42 -> 43', $fontBody, $white, 61, 174)
   } finally {
     $fontTitle.Dispose()
     $fontBody.Dispose()
