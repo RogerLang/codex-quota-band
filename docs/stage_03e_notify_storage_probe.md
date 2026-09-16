@@ -1,11 +1,11 @@
 # Stage 03E NotifyApi -> system-storage -> Lua probe
 
 Date prepared: 2026-09-16.
-Status: **real-device storage test still inconclusive; node discovery is fixed, but the synthetic notification has not yet been sent because XMS wearable authorization is not currently granted.**
+Status: **real-device notification delivery PASS; bounded persist-db marker scan NEGATIVE; notification-directory branch not yet tested because `io.popen` enumeration is unavailable.**
 
 ## Why this stage exists
 
-Stage 03A already proved the warm-background bridge on the target Xiaomi Smart Band 9 Pro:
+Stage 03A proved the warm-background bridge on the target Xiaomi Smart Band 9 Pro:
 
 ```text
 Android -> XMS / Mi Fitness -> non-foreground validation RPK
@@ -13,7 +13,7 @@ Android -> XMS / Mi Fitness -> non-foreground validation RPK
 -> Lua true watchface
 ```
 
-The unresolved product boundary is cold-start / post-reboot delivery. Stage 03E tests a different data route that does not depend on waking a Quick App:
+Stage 03E tested whether the already-proven Xiaomi `NotifyApi` path could avoid waking a Quick App:
 
 ```text
 Android validation APK
@@ -23,87 +23,36 @@ Android validation APK
 -> Lua true watchface
 ```
 
-A matching companion RPK may still need to remain **installed** because Xiaomi XMS authorization is tied to the Android/wearable app pair. Stage 03E never opens that RPK and does not use it to transport the marker.
+A package/signature-matched validation RPK remained installed only because Xiaomi XMS authorization is tied to the Android/wearable app pair. The RPK was not opened or used to transport the marker.
 
-## XMS authorization prerequisite
+## Confirmed Android / XMS result
 
-The repository's earlier official Xiaomi Wearable Demo probe documented the following behavior:
-
-- with only the Android APK installed, `requestPermissions` returned `APP not installed`;
-- after installing the package/signature-matched RPK, Xiaomi Wearable permissions could be granted;
-- the official flow requested both `DEVICE_MANAGER` and `NOTIFY` before sending through `NotifyApi`.
-
-Stage 03E originally requested only `NOTIFY` and collapsed all permission exceptions into `DENIED`. That made `APP not installed`, explicit denial, and other request failures indistinguishable.
-
-The hardened Stage 03E retry now checks and reports, in order:
+The final validation APK reported:
 
 ```text
-WearAppInstalled
-DEVICE_MANAGER
-NOTIFY
-NotifyRequest
+Node: NODE_FOUND
+ConnectedNodes: 1
+Band9ProMatches: 1
+NodeSelection: NAME_MATCH
+WearAppInstalled: TRUE
+DeviceManagerPermission: PASS
+NotifyPermission: PASS
+NotifyRequest: REQUESTED_CALLBACK_TIMEOUT
+NodeAttempt: 1
 ```
 
-It also distinguishes `RPK_REQUIRED`, `DENIED`, `REQUEST_FAILED`, and related states without exposing node IDs, MAC addresses, serial numbers, or raw node names.
-
-## Public evidence behind the candidate storage paths
-
-The candidate paths are hypotheses, not established notification-payload locations:
-
-- openVela projects publicly reference `/data/persist.db` as a persistent UnQLite database;
-- community Xiaomi/Vela tooling publicly references `/data/persist.db.bk` and `/data/app/notifications/icon/` plus `/data/app/notifications/small/` as cache/storage paths.
-
-Those references justify a read-only test. They do **not** establish that notification title/body text is stored there in clear text on this Band 9 Pro firmware.
-
-## Safety boundary
-
-Stage 03E must remain strictly inside these limits:
-
-1. Keep Mi Fitness as the normal wearable connection manager.
-2. A previously verified package/signature-matched validation RPK may remain installed solely to satisfy XMS authorization. Do not launch or wake it during Stage 03E. Do not use Stage 03C/03D experimental RPKs as the test baseline; prefer the known-good Stage 03A/03B validation RPK if an RPK reinstall is required.
-3. Android may send exactly one synthetic notification through `NotifyApi` per user button press.
-4. The Lua watchface may only open candidate files for reading and search for the exact synthetic markers.
-5. Do not delete, truncate, rename, chmod, copy over, or otherwise mutate `/data/persist.db`, its backup, or `/data/app/notifications`.
-6. Do not use root, LSPosed, Gadgetbridge, Notify for Xiaomi, or BLE takeover.
-7. Do not send Codex/OpenAI credentials, prompts, task content, or real quota data during this probe.
-8. Keep the probe I/O bounded: only database tail windows and a small capped set of notification files are scanned, at a low cadence, for a finite probe window.
-9. The validation APK may use a single connected node fallback only when XMS returns exactly one node and the Band 9 Pro display-name matcher finds no match. This is diagnostic-only and must not be copied into the formal runtime without separate approval.
-
-## Synthetic markers
-
-Android sends:
+The Band 9 Pro visibly displayed the exact synthetic notification and vibrated:
 
 ```text
 Title: CQNOTIFY-47-A9F3
 Body:  SEQ47-WEEK38-RUN2
 ```
 
-The watchface searches for those exact byte strings in bounded read-only windows:
+Therefore Android -> XMS / Mi Fitness -> Band 9 Pro system notification delivery is **PASS**. As in Stage 02D, `REQUESTED_CALLBACK_TIMEOUT` is an API callback observation and does not mean delivery failed when the physical band receipt is confirmed.
 
-```text
-/data/persist.db                 -> last 512 KiB only
-/data/persist.db.bk              -> last 512 KiB only
-/data/app/notifications/**/*     -> max 16 files, max 128 KiB/file
-```
+## Bounded storage probe result
 
-The directory scan is best-effort. If `io.popen` is unavailable, the fixed database checks still run. The probe scans immediately, then at most every 15 seconds, and stops after 12 scans (about 3 minutes) or after `FOUND BOTH`.
-
-## Build artifacts
-
-Expected local-only artifacts:
-
-```text
-out/stage03e/CodexQuota-Stage03E-validation.apk
-out/stage03e/CodexQuota-Stage03E-notify-storage.face
-```
-
-No new Stage 03E RPK is produced. If XMS authorization needs a wearable companion to be reinstalled, reuse the already verified validation RPK/signing identity from Stage 03A/03B rather than creating another experimental wearable app.
-
-The validation APK keeps the isolated validation identity and signing setup already used by earlier Band 9 Pro probes. The watchface uses EasyFace device type `367` and 336x480 Lua/LVGL layout.
-
-## Real-device results so far
-
-The hardened Stage 03E watchface rendered normally. Its bounded scan eventually reported:
+The hardened Stage 03E Lua watchface completed all 12 scans and reported:
 
 ```text
 NOT FOUND
@@ -114,76 +63,48 @@ DIR_ENUM_UNAVAILABLE
 sources readable
 ```
 
-This does **not** yet count as a negative storage result because the marker notification was not sent.
-
-### Attempt 1: node discovery failure
-
-The first Android build reported:
+The probe scanned only bounded read-only windows:
 
 ```text
-Node: NODE_NOT_FOUND
-NotifyPermission: NOT_CHECKED
-NotifyRequest: NOT_SENT
-NodeAttempt: 3
+/data/persist.db                 -> last 512 KiB only
+/data/persist.db.bk              -> last 512 KiB only
 ```
 
-The validation node matcher was then hardened with sanitized counts and a single-node diagnostic fallback.
+Result: neither synthetic marker was visible in the tested persist-db windows after a notification that was independently confirmed delivered to the band.
 
-### Attempt 2: node found, wearable permission not granted
+This is a **negative result for the bounded `/data/persist.db` / `.bk` clear-text hypothesis**. It is not evidence that notification text is never persisted elsewhere or that a database page outside the tested tail window could never contain it.
 
-The next real-device report was:
+## Remaining notification-directory boundary
+
+The Stage 03E watchface attempted to enumerate `/data/app/notifications` through `io.popen`, but this Lua runtime reported `DIR_ENUM_UNAVAILABLE`. Therefore Stage 03E never actually inspected files under that directory.
+
+Band 9 Pro community filesystem evidence identifies at least:
 
 ```text
-Node: NODE_FOUND
-ConnectedNodes: 1
-Band9ProMatches: 1
-NodeSelection: NAME_MATCH
-NotifyPermission: DENIED
-NotifyRequest: NOT_SENT
-NodeAttempt: 1
+/data/app/notifications/noti_reply_sms.db
 ```
 
-This proves XMS node discovery is functioning and the correct Band 9 Pro node is selected. It does not test the notification-storage hypothesis because the notification still was not sent.
+and other Xiaomi/Vela tooling references notification icon-cache subdirectories. Community Lua code on Xiaomi wearables also uses `lvgl.fs.open_dir()` / directory handles, providing a safer alternative to shell enumeration.
 
-The next APK therefore checks the package/signature-matched RPK installation state and follows the already-proven authorization order:
+That narrow remaining branch is moved to Stage 03F. Stage 03F must remain read-only, bounded, and limited to `/data/app/notifications`; it must not resume broad `/data` scanning.
 
-```text
-isWearAppInstalled
--> DEVICE_MANAGER
--> NOTIFY
--> NotifyApi.sendNotify
-```
+## Safety boundary retained
 
-## Real-device retry procedure
-
-1. Keep the already-installed hardened Stage 03E `.face`; no watchface rebuild is needed.
-2. Install/update the newest Stage 03E validation APK.
-3. Confirm Mi Fitness shows the Band 9 Pro connected.
-4. Press `检查权限并发送测试通知` once and copy the sanitized report.
-5. If `WearAppInstalled` is not `TRUE`, install/overwrite the known-good Stage 03A/03B validation RPK with the matching validation signing identity. Do **not** open it. Reconnect Mi Fitness and retry once.
-6. If Xiaomi/Mi Fitness presents authorization UI for `DEVICE_MANAGER` and `NOTIFY`, approve both for this validation pair.
-7. Continue only when the report shows `WearAppInstalled: TRUE`, `DeviceManagerPermission: PASS`, and `NotifyPermission: PASS`.
-8. If `NotifyRequest` is `CALLBACK_SUCCESS` or `REQUESTED_CALLBACK_TIMEOUT` and the band visibly receives the synthetic notification, return to the Stage 03E watchface.
-9. Wait 15–45 seconds and record the watchface result. The fixed database scan can continue to its bounded 12-scan endpoint if needed.
-10. If the Android report still says `NOT_SENT`, stop; the storage result remains inconclusive.
-11. Restore the user's normal watchface after the result is recorded.
-
-If the band becomes unstable, reboots unexpectedly, or the watchface repeatedly stalls, stop the probe and restore a known-good watchface before any further experiment.
+- Keep Mi Fitness as the normal wearable connection manager.
+- Do not launch/wake the validation RPK during notification-storage probes.
+- No root, LSPosed, Gadgetbridge, Notify for Xiaomi, or BLE takeover.
+- Do not delete, truncate, rename, chmod, overwrite, or otherwise mutate system storage.
+- Use only synthetic markers; no real Codex prompts, credentials, task content, or quota data.
+- Restore the user's normal watchface after validation.
 
 ## Interpretation
 
-| Band receives NotifyApi notification | Watchface result | Interpretation |
-| --- | --- | --- |
-| yes | `FOUND BOTH` | Positive evidence that both synthetic notification fields are readable through the tested system-storage route. |
-| yes | `PARTIAL` | One field is visible; promising but insufficient for a reliable quota payload bridge. |
-| yes | `NOT FOUND` + sources readable | Negative result for these candidate paths / bounded clear-text representation only. |
-| yes | sources unreadable | Inconclusive: notification delivery works, but Lua cannot read the tested storage. |
-| no / not sent | any | Inconclusive for storage; first satisfy/diagnose XMS authorization and notification delivery. |
+Stage 03E establishes:
 
-`REQUESTED_CALLBACK_TIMEOUT` on Android does not by itself mean NotifyApi delivery failed; actual band receipt is the decisive observation for notification delivery.
+```text
+NotifyApi delivery to Band 9 Pro          PASS
+persist.db/.bk bounded marker search      NEGATIVE
+/data/app/notifications enumeration       NOT TESTED
+```
 
-## Acceptance boundary
-
-Stage 03E is considered a positive bridge candidate only if the Band receives the synthetic notification and the Lua watchface subsequently shows `FOUND BOTH` without the companion RPK being opened.
-
-A positive result would justify a follow-up Stage 03F that determines the exact storage schema and whether quota/task values can be encoded safely without creating user-visible notification spam. A negative result after a **confirmed delivered notification** means this route should be dropped rather than expanded.
+Stage 03E is therefore **not a positive bridge candidate by itself**. Stage 03F is the final narrow test for the notification-directory branch before deciding whether to drop the NotifyApi-to-watchface storage route.
