@@ -56,17 +56,49 @@ try {
 }
 
 # EasyFace-compatible projects in the community examples are UTF-16LE XML.
+$fprj = Join-Path $work 'Stage03AProbe.fprj'
 $xml = Get-Content -LiteralPath (Join-Path $source 'Stage03AProbe.fprj') -Raw -Encoding UTF8
 $xml = $xml -replace 'encoding="utf-8"', 'encoding="utf-16"'
-[System.IO.File]::WriteAllText((Join-Path $work 'Stage03AProbe.fprj'), $xml, [System.Text.Encoding]::Unicode)
+[System.IO.File]::WriteAllText($fprj, $xml, [System.Text.Encoding]::Unicode)
 
 $compiler = Join-Path $template 'watchface\tools\Compiler.exe'
 if (-not (Test-Path $compiler)) { throw 'Pinned template does not contain Compiler.exe.' }
-& $compiler -b (Join-Path $work 'Stage03AProbe.fprj') $OutputDir $faceName $faceId
-if ($LASTEXITCODE -ne 0) { throw "Watchface compiler failed with exit code $LASTEXITCODE." }
+$stdoutPath = Join-Path $temp 'compiler.stdout.txt'
+$stderrPath = Join-Path $temp 'compiler.stderr.txt'
+$process = Start-Process -FilePath $compiler -ArgumentList @('-b', $fprj, $OutputDir, $faceName, $faceId) `
+  -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+$compilerExit = $process.ExitCode
+$compilerStdout = if (Test-Path $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw } else { '' }
+$compilerStderr = if (Test-Path $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw } else { '' }
+if ($compilerStdout) { Write-Output $compilerStdout.TrimEnd() }
+if ($compilerStderr) { Write-Warning $compilerStderr.TrimEnd() }
 
 $face = Join-Path $OutputDir $faceName
+$compilerText = $compilerStdout + "`n" + $compilerStderr
+$reportedReady = $compilerText -match 'Watchface:\s+.+\bis ready\b'
+$reportedNoErrors = $compilerText -match '\bNo Errors\b'
+$knownPostSuccessClrExit = -532462766 # 0xE0434352, generic unhandled .NET exception.
+
+if ($compilerExit -ne 0) {
+  $postSuccessCrash =
+    $compilerExit -eq $knownPostSuccessClrExit -and
+    (Test-Path $face) -and
+    $reportedReady -and
+    $reportedNoErrors
+  if ($postSuccessCrash) {
+    Write-Warning "Compiler.exe produced the watchface and reported success, then exited with known post-success CLR code $compilerExit; accepting artifact for Stage 03A probe validation."
+  } else {
+    throw "Watchface compiler failed with exit code $compilerExit."
+  }
+}
+
 if (-not (Test-Path $face)) { throw "Expected watchface artifact not found: $face" }
+$faceInfo = Get-Item -LiteralPath $face
+if ($faceInfo.Length -lt 4096) { throw "Watchface artifact is unexpectedly small: $($faceInfo.Length) bytes." }
+$faceHash = (Get-FileHash -LiteralPath $face -Algorithm SHA256).Hash
 Write-Output "Built $face"
+Write-Output "Size: $($faceInfo.Length) bytes"
+Write-Output "SHA-256: $faceHash"
+Write-Output "Compiler exit: $compilerExit"
 Write-Output "LuaDevTemplate commit: $pinned"
 Write-Output "Watchface ID: $faceId"
