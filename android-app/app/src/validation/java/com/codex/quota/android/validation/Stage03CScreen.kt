@@ -50,8 +50,8 @@ internal fun Stage03CScreen(copyReport: (String) -> Unit) {
       Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = CodexTokens.Space.Page, vertical = CodexTokens.Space.Xl),
     ) {
-      Text("Stage 03C", fontSize = CodexTokens.Type.PageTitle, fontWeight = FontWeight.SemiBold)
-      Text("RPK 自动返回表盘探针", fontSize = CodexTokens.Type.Body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("Stage 03D", fontSize = CodexTokens.Type.PageTitle, fontWeight = FontWeight.SemiBold)
+      Text("复用已验证入口的自动返回探针", fontSize = CodexTokens.Type.Body, color = MaterialTheme.colorScheme.onSurfaceVariant)
       Spacer(Modifier.height(CodexTokens.Space.Xl))
       Card(
         modifier = Modifier.fillMaxWidth(),
@@ -66,7 +66,7 @@ internal fun Stage03CScreen(copyReport: (String) -> Unit) {
               "② 不要手动打开 Probe。\n" +
               "③ 点击下面按钮。\n" +
               "④ 观察手环是否短暂切换后自动回到表盘。\n" +
-              "⑤ 最终确认表盘是否显示 SEQ 45。",
+              "⑤ 最终确认表盘是否显示 SEQ 46。",
             modifier = Modifier.padding(top = CodexTokens.Space.Md),
             fontSize = CodexTokens.Type.Body,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -76,7 +76,7 @@ internal fun Stage03CScreen(copyReport: (String) -> Unit) {
               running = true
               result = null
               scope.launch {
-                result = runner.wakeSendAndReturn(45)
+                result = runner.wakeSendAndReturn(46)
                 running = false
               }
             },
@@ -84,7 +84,7 @@ internal fun Stage03CScreen(copyReport: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(top = CodexTokens.Space.Xl),
             shape = RoundedCornerShape(CodexTokens.Radius.Button),
           ) {
-            Text(if (running) "正在同步…" else "唤醒、写入 45 并自动返回")
+            Text(if (running) "正在同步…" else "唤醒、写入 46 并自动返回")
           }
         }
       }
@@ -108,7 +108,7 @@ internal fun Stage03CScreen(copyReport: (String) -> Unit) {
           }
         }
         Text(
-          "请另外记录：① 是否自动回到表盘；② 是否看到明显黑屏/闪屏以及大概持续多久；③ 表盘是否变成 SEQ 45。",
+          "请另外记录：① 是否自动回到表盘；② 是否看到明显黑屏/闪屏以及大概持续多久；③ 表盘是否变成 SEQ 46。",
           modifier = Modifier.padding(top = CodexTokens.Space.Lg),
           fontSize = CodexTokens.Type.Body,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
