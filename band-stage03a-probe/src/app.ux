@@ -1,4 +1,5 @@
 <script>
+import app from '@system.app'
 import interconnect from '@system.interconnect'
 import file from '@system.file'
 import stage03 from './common/stage03-state.cjs'
@@ -6,13 +7,26 @@ import stage03 from './common/stage03-state.cjs'
 const connection = interconnect.instance()
 const SEQUENCE_URI = 'internal://files/watchface_sequence.txt'
 const STATE_URI = 'internal://files/watchface_state.json'
+const AUTO_RETURN_DELAY_MS = 120
 
 function rawMessage(event) {
   return event && event.data !== undefined ? event.data : event
 }
 
+function returnToWatchfaceSoon() {
+  setTimeout(() => {
+    try { app.terminate() } catch (_) {}
+  }, AUTO_RETURN_DELAY_MS)
+}
+
 function sendAck(message, persisted) {
-  try { connection.send({ data: stage03.createAck(message, persisted) }) } catch (_) {}
+  try {
+    connection.send({
+      data: stage03.createAck(message, persisted),
+      success: returnToWatchfaceSoon,
+      fail: () => {},
+    })
+  } catch (_) {}
 }
 
 function persist(message) {
@@ -41,15 +55,10 @@ function installStage03Handler() {
   }
 }
 
-// Deliberately register at module load as well as onCreate. Stage 03A is testing whether the
-// wearable process can remain/wake sufficiently for interconnect delivery after its page is hidden.
 installStage03Handler()
 
 export default {
   onCreate() { installStage03Handler() },
-  onDestroy() {
-    // Validation-only: do not clear the module-level handler here. If the runtime keeps the
-    // process alive after the page is hidden, clearing it would manufacture a false failure.
-  }
+  onDestroy() {}
 }
 </script>
