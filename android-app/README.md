@@ -1,56 +1,37 @@
 # Codex额度 Android
 
-0.6.5 的日常链路为：`Windows → Android Codex额度 → 小米运动健康 → 手环 RPK`。
-AstroBox 只在首次安装或升级 RPK 时临时使用，不参与日常额度同步、任务同步或提醒。
+Foundation 01 的正式链路为：
 
-Android 端使用小米官方 `xms-wearable-lib_1.4_release.aar`。该 SDK 二进制受其提供方许可约束，
-不随本仓库分发；开发者需要从小米官方开发者渠道取得并放入 `android-app/app/libs/`。
-APK 与 RPK 必须使用相同的
-应用包名和配套签名，Wearable SDK 才会把设备权限与 `MessageApi` 数据通道交给该应用。
+`ntfy WebSocket/replay → AES-256-GCM decrypt → RuntimeStateRepository → 小米运动健康 → Band 9 Pro（适配中）`
 
-这是 0.6.5 Android 应用目录。当前包含任务看板、通知决策、Task Sync v1
-严格解析核心、额度 Snapshot v1/v2/v3 严格解析与可信缓存归并，以及用户确认后的三页
-Compose 界面。
+Android 不再依赖 proprietary `xms-wearable-lib_1.4_release.aar`。Gradle 直接构建仓库中的
+`third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib`，固定 upstream commit
+`6483f939785e9c1dd011465d573931f669a6adab`。`XiaomiWearableBridge` 在创建 Node/Auth/Message/
+Notify API 前强制 `WearableBackend.XIAOMI`，继续绑定小米运动健康官方 XMS service。
 
-当前规则：
+正式 Windows → Android transport 是 relay protocol v1：
 
-- 手机保留全部处理中/需要授权任务和最近 10 条等待查看任务。
-- 手环快照按需要授权、处理中、等待查看排序，最多 3 条。
-- 手机端等待查看和需要授权默认都请求振动、不播放声音。
-- 手环端只表达是否发送，收到后的震动由小米运动健康和手环系统控制。
-- 任务协议拒绝未知字段、超长标题、重复或非法会话标识，不接收原始提示词、
-  回复、命令、路径和工具输出。
-- 额度协议同样拒绝未知字段和非法时间，旧快照不能覆盖新数据；断线时保留最近一次
-  可信额度，明确显示为离线而不是已同步。额度协议按连接协商 v1、v2 或 v3；v3 额外携带脱敏的上游新鲜度。
-- 加密同步流在连接建立时协商额度与任务协议版本，并拒绝未知字段和嵌套快照时间倒挂；
-  每条消息携带连接标识和单调序列，供传输会话拒绝跨连接消息。局域网传输不会回退到
-  旧版明文 HTTP。
-- Android 将二维码中的 Windows 公钥 SHA-256 指纹作为唯一信任锚，使用常量时间比较
-  校验证书；IP、局域网发现结果和普通自签名证书都不能替代该身份。
-- Android 只持久化电脑公钥指纹和随机手机令牌，两者以 Keystore 不可导出 AES 密钥
-  加密保存，并明确排除云备份和设备迁移；损坏密文会被清除而不是绕过验证。
-- Android 设置页提供统一“连接电脑”入口。二维码由 App 内的 CameraX + 随包 ML Kit 模型识别，只在用户选择扫码时请求相机权限；手动模式输入 6 位配对码并核对双端安全校验码，不要求填写 IP。连接页复用主应用设计令牌和玻璃卡片。Android 已接入 WSS `/pair` 配对客户端和 `/sync` 自动重连会话；新连接完成协议协商后会立即请求当前额度确认。配对深链使用 `codexquota://pair`，长期令牌只通过已固定公钥的 TLS 通道返回，不进入二维码或局域网发现公告。
-- Android Manifest 禁止明文网络；WSS 客户端的信任管理器和主机校验器都会重新核对
-  已配对电脑的公钥指纹，不接受系统 CA 或普通自签名证书作为替代。
-- 首页以 5 小时额度圆环为主层级，在同一卡片内用横向进度条显示周额度；电脑与手环使用一个双栏连接卡片。
-- 数据源没有 5 小时窗口时显示 `-- / 暂无数据`，窗口存在但尚未同步时显示 `-- / 待同步`，不猜测额度。
-- 正式运行的初始状态只显示离线和等待同步，不使用开发预览中的示例额度或任务。
-- 通知设置保持只读任务语义，不包含回复、授权、停止或其他反向控制入口。
-- Android 13 及以上首次启动时只请求一次系统通知权限；拒绝不会阻止使用，也不会在
-  后续启动时反复弹窗，用户可从设置页重新开启。
-- “需要授权”和“等待查看”均使用默认振动、无声音的独立系统渠道，两者可在 Android
-  系统设置中分别调整。手机 App 自身是否位于前台不额外抑制提醒。
-- 设置页可手动检查本项目公开 GitHub Release；应用前台每天静默检查至多一次，不自动下载或安装，
-  检查失败不影响局域网同步。
+- 二维码保存 HTTPS base URL、随机 256-bit topic、256-bit AES key 和 device ID；
+- `PairingCredentialStore` 使用 Android Keystore AES-GCM 加密保存 relay secret；
+- 首次无 cursor 订阅 `since=latest`，重连使用最后接受的 ntfy message ID；
+- `open` / `keepalive` 不进入 domain；
+- 解密后复用 quota v3 / task v1，持久化拒绝重复或倒退 sequence；
+- “刷新”只重连 relay、获取缓存 state 并重新计算 freshness，不命令 Windows 请求 OpenAI。
 
-Android ↔ Windows WSS 往返、正式托盘二维码窗口、局域网服务、Hook 和真实
-额度采集已经完成自动化验证。`0.6.5` 为本地待验收候选，尚未发布；本地 debug APK 仍不能当作正式发布包，最新结果见根目录 `docs/build-verification.md`。
+旧 WSS、TLS pinning、UDP discovery 和 6 位配对类暂留为 legacy 对照，`CodexQuotaApplication`
+不再启动它们。不要把 6 位配对扩展为公网协议。
 
-本地测试：
+运行时 application ID 是 `io.github.rogerlang.codexquota`，Kotlin namespace 暂保留
+`com.codex.quota.android`。Vela package identity 必须与 application ID 一致。
+
+本地验证：
 
 ```powershell
-$env:JAVA_HOME = Join-Path $env:LOCALAPPDATA "codex-quota-dev\jdk-17"
-$env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA "Android\Sdk"
+$env:JAVA_HOME = '<JDK 17 path>'
+$env:ANDROID_HOME = '<Android SDK path>'
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
-..\spikes\android-background-probe\gradlew.bat -p . :app:testDebugUnitTest
+..\spikes\android-background-probe\gradlew.bat -p . :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
 ```
+
+Band 9 Pro 仍是目标设备 / 适配中，Foundation 不实现 Lua watchface、AOD、Vela → Lua IPC 或
+336×480 UI，也不宣称真机支持。

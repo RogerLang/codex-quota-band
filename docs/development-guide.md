@@ -1,133 +1,103 @@
-# CodexQuota 开发与交付指南
+# CodexQuota Foundation 开发与交付指南
 
-本文是 `0.6.5` 本地候选的日常开发入口。产品取舍以根目录 `CONTEXT.md` 为准，Agent 工作规则以 `AGENTS.md` 为准，代码分层见 `docs/architecture.md`。
-
-本指南覆盖 Windows、Android 与手环 RPK 三端。开始新的主任务前，先阅读
-`docs/current-status.md`，其中列出临时版本差异和必须先由用户确认的跨端冲突。
+本文适用于 fork 的 Foundation 01。先读根目录 `AGENTS.md`、`CONTEXT.md` 和
+`docs/current-status.md`。本阶段不提交、不 push、不创建 PR/Release，必须保留 owner 可审阅的未提交 diff。
 
 ## 开始前
 
 ```powershell
 git status --short
-Get-Content README.md -TotalCount 220
-Get-Content CHANGELOG.md -TotalCount 120
+git branch --show-current
+git rev-parse HEAD
+git remote -v
 ```
 
-涉及安全、构建或真机时，继续阅读 `docs/current-status.md`、`docs/security.md`、`docs/build-verification.md` 和
-`docs/device-acceptance.md`。保留混合工作区中已有的修改、截图和未跟踪文件，不使用
-`git reset --hard`、`git clean` 或无检查的 `git add -A`。
+保留已有修改，不使用 `git reset --hard`、`git clean`、未经检查的 stash 或 `git add -A`。
 
-## 构建与测试
+## CleanRoom SDK
 
-根目录历史组件和协议回溯：
+源码位于 `third_party/xms_wearable_sdk_cleanroom/`，固定 commit：
 
-```powershell
-npm install
-npm test
-npm run test:plugin
-npm run build:plugin
+```text
+6483f939785e9c1dd011465d573931f669a6adab
 ```
 
-Windows 原生端：
+`android-app/settings.gradle.kts` 把 `xms-wearable-lib` 作为本地 Android library module 引入。
+禁止恢复 `android-app/app/libs/xms-wearable-lib_1.4_release.aar`，也不要改成未经确认长期可用的第三方
+Maven artifact。更新 upstream 必须单独审阅 API、Binder、LICENSE 和 pinned commit。
+
+`XiaomiWearableBridge` 必须通过 `XiaomiWearableBackend.initializer` 先设置
+`WearableBackend.XIAOMI`，再调用任何 `Wearable.get*Api()`。
+
+## Windows 构建与测试
 
 ```powershell
 Set-Location windows-native
 cargo test --workspace
 cargo build --release --bin codex_quota_windows
-.\scripts\build-installer.ps1
-.\scripts\test-installer.ps1
 ```
 
-`cargo build --release` 生成的是直接运行的候选 EXE，不会安装、更不会替换当前用户已安装程序；只有
-`scripts\build-installer.ps1` 生成的 `CodexQuota-Setup-*.exe` 才是可安装包。测试时可设置独立
-`CARGO_TARGET_DIR`，将临时 EXE 与正在运行的托盘程序隔离。
+重点测试：
 
-Windows 构建使用 LLVM-MinGW 工具链中的 `windres` 把 `assets/app-icon.ico` 写入主程序；安装包脚本会调用
-`scripts/test-executable-icon.ps1` 检查 `ICON` 与 `GROUP_ICON` 资源。图标检查和最小系统 PATH 独立启动检查都通过后，才可把安装包交给普通用户。
+- relay AES-GCM round-trip、wrong key、篡改 tag、96-bit 随机 nonce；
+- plaintext 白名单和 envelope 外层字段；
+- sequence 持久化；
+- 可替换/mock HTTP endpoint、失败隔离和有限重试；
+- 正式入口使用 `RelayHost`，不启动 `WindowsHost`、LAN listener 或 UDP discovery。
 
-托盘 EXE 正在运行时，使用独立临时目录执行测试，避免文件锁产生假失败：
+正在运行已安装托盘程序时使用独立 `CARGO_TARGET_DIR`，避免旧 EXE 文件锁干扰。Foundation 不构建
+安装包或创建 Release，除非 owner 另行要求。
 
-```powershell
-$env:CARGO_TARGET_DIR = Join-Path $env:LOCALAPPDATA 'Temp\codex-quota-windows-test-target'
-cargo test --workspace
-```
-
-Android：
+## Android 构建与测试
 
 ```powershell
 Set-Location android-app
-$env:JAVA_HOME = Join-Path $env:LOCALAPPDATA 'codex-quota-dev\jdk-17'
-$env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+$env:JAVA_HOME = '<JDK 17 path>'
+$env:ANDROID_HOME = '<Android SDK path>'
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 ..\spikes\android-background-probe\gradlew.bat -p . :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
 ```
 
-扫码依赖由正式版压缩器处理，Debug 构建不能覆盖这条发布风险。手机通过 USB 连接并允许安装测试包后，额外运行正式版扫码回归：
+验收必须证明删除 proprietary AAR 后仍能完成 debug APK。重点测试：
 
-```powershell
-..\spikes\android-background-probe\gradlew.bat -p . -PcodexQuotaInstrumentationBuildType=release :app:connectedAndroidTest --console=plain
-```
+- Android AES-GCM round-trip、wrong key/tag；
+- strict envelope / payload parser；
+- ntfy `message/open/keepalive` 分类；
+- persistent sequence replay/rollback；
+- 首次 `since=latest` 与 cursor replay；
+- `PairingCredentialStore` 的 relay codec 和 Android Keystore instrumented round-trip；
+- CleanRoom Node/Auth/Message/Notify/Data/Listener/Permission API 编译；
+- Xiaomi backend 在 API factory 前完成配置。
 
-该检查会安装 release APK 和仅用于测试的 APK，打开“连接电脑”并进入扫码页；如果正式版反射入口再次被压缩掉、页面崩溃或无法打开，构建直接失败。
+真实网络测试只允许随机 topic/key 和虚构 quota/task。不得发送本机真实任务标题、token 或日志。
 
-部分国产系统即使已经开启 USB 安装，ADB 的流式安装仍可能返回 `INSTALL_FAILED_USER_RESTRICTED`。确认设备授权无误后，应改用
-`adb install --no-streaming -r app-release.apk` 覆盖安装；不要让用户卸载应用或清除配对数据。
+## Relay 开发约束
 
-如需在没有真实 5 小时上游数据时检查 Android 排版，可在本地构建命令中临时加入
-`-PcodexQuotaDemoFiveHour=true`。该参数只把手机界面显示为 68%，不会写入额度缓存或下发手环；
-它默认关闭，正式候选必须在不带该参数的情况下重新构建。
+- 默认 base URL 是 `https://ntfy.sh`，配置必须是 HTTPS origin。
+- ntfy message body 只能是 `version/nonce/ciphertext` envelope。
+- 不使用 title、tags、priority、filename 或 actions 传业务信息。
+- Android 首次无 cursor 使用 `since=latest`，重连用最后 message ID。
+- Android 刷新只重连/取缓存/重算 freshness，不新增 Android → Windows command channel。
+- relay 失败不得阻塞本地 quota collector 或 Hook spool 处理。
+- 不创建 Windows 网络 listener、防火墙入站规则或局域网发现广播。
 
-手环 RPK：
+## Package identity
 
-```powershell
-Set-Location band-app
-npm install
-npm run build
-```
+- Android runtime application ID：`io.github.rogerlang.codexquota`
+- Vela package identity：`io.github.rogerlang.codexquota`
+- Kotlin namespace/source package 暂保留 `com.codex.quota.android`
 
-手环正式 RPK 必须使用与 Android release APK 相同的本机证书。先完成 `android-app/local.properties`
-中的忽略签名配置，然后在 Windows 上执行：
+不要为包名迁移顺手全量移动 Kotlin 源码。
 
-```powershell
-Set-Location band-app
-.\scripts\prepare-release-signing.ps1
-npm run build:release
-```
+## 真机边界
 
-该脚本只在被忽略的 `band-app/sign/release/` 写入派生 PEM，不会把私钥加入仓库。
+本轮不修改/实现 Band 9 Pro Lua watchface、AOD、Vela → Lua IPC 或 336×480 UI。Band 9 Pro 未完成
+真实安装、XMS 权限、消息、通知、后台/锁屏和小米运动健康共存验收前，只能写“目标设备 / 适配中”。
 
-## 变更后的最低验证
+上游 Band 10 验收记录可以作为历史参考，不能替代本 fork 的 Band 9 Pro 验收。
 
-| 变更范围 | 自动验证 | 必要的真机确认 |
-| --- | --- | --- |
-| Windows Hook、任务、额度 | `cargo test --workspace` | 实际 Hook、任务标题、状态归并 |
-| WSS、配对、安全 | Windows 测试 + Android 协议测试 + release 真机扫码回归 | App 内置扫码、6 位配对码、安全校验码、重连和局域网变化 |
-| Android UI/任务板 | Android 单测、lint、assemble | 三页布局、竖向滚动、移除二次确认 |
-| 通知 | 通知/策略单测 | ChatGPT 失焦、后台/锁屏、通知栏和手环震动 |
-| Wearable/RPK | Android 构建 + RPK 构建测试 | 小米运动健康连接保持、手环页面可读 |
-| 安装器 | 构建脚本 + 安装器 smoke test | 当前用户安装、启动和卸载 |
+## 交付检查
 
-自动测试不能替代用户验收。`0.6.5` 仍需完成 Windows、安卓手机和小米手环 10 的真机验收；后续新增或改动的功能仍必须重新说明其真机验证范围。
-
-## 交付边界
-
-- 当前本地候选版本为 `0.6.5`，最近正式版本为 `0.6.4`；发布附件与 SHA-256 以 `docs/build-verification.md` 为准。新候选不得覆盖已发布版本的验收结论。
-- Windows、Android APK、手环 RPK 的产品版本必须一致；协议版本单独维护在 `contract/`。
-- 手环 UI 修改必须先给用户看 `212×520` 预览，确认后才改 RPK 源码。
-- `0.6.4` 的正式发布包已经通过自动验证和三端联动验收。后续发布流程展示版本、改动、测试、产物和 SHA-256。
-- Debug APK/RPK 仅用于开发和真机验证；正式产物应使用固定发布签名，私钥不得进入仓库。
-
-## 其他手环型号的测试
-
-- 未经对应型号真机验证的手环只能写“实验性适配”或“模拟器预览”。先完成模拟器尺寸/形状检查，再验证实际安装、同步、页面可读性和通知。
-- 适配记录只接受设备型号、系统/应用版本、RPK 版本、可复现步骤、可见状态和经过裁剪的截图；不得保存设备 ID、蓝牙地址、账号信息、配对材料、任务内容或完整日志。
-
-## 文档职责
-
-- `CONTEXT.md`：产品范围、用户决策、隐私红线和已确认语义。
-- `AGENTS.md`：未来 AI Agent 的工作规则和快速命令。
-- `docs/architecture.md`：当前代码架构、协议和数据流。
-- `docs/build-verification.md`：实际构建、测试和产物证据。
-- `docs/device-acceptance.md`：公开的设备验收结论。
-- `CHANGELOG.md`：用户可见的已发布变化。
-- `CONTRIBUTING.md`：外部测试者和代码贡献者的反馈范围与隐私要求。
+结束前生成 `docs/foundation_01_review.md`，至少包含：修改摘要、架构图、修改文件、CleanRoom 来源、
+relay protocol v1、ntfy metadata boundary、测试命令/结果、未真机验证、下一阶段建议、
+`git status --short`、`git diff --stat` 和明确的 no commit / no push。

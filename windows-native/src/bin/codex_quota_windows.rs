@@ -7,14 +7,12 @@ use codex_quota_windows_core::hook::{
     HookDiagnosticOutcome, HookDiagnosticStore, HookEventSpool, HookTaskRuntime, merge_hook_config,
     remove_hook_config,
 };
-use codex_quota_windows_core::host::{
-    HostPaths, HostPublisher, PairingPresentation, WindowsHost, private_ipv4_addresses,
-};
 use codex_quota_windows_core::network::SyncPayload;
-use codex_quota_windows_core::pairing_discovery::PairingDiscoveryAnnouncement;
 use codex_quota_windows_core::quota::{
     QuotaCollector, UpstreamConfirmationErrorCode, load_cached_snapshot, save_cached_snapshot,
 };
+use codex_quota_windows_core::relay::RelayLatestPublisher;
+use codex_quota_windows_core::relay_host::{RelayHost, RelayHostPaths, RelayPairingPresentation};
 use codex_quota_windows_core::{
     ChatGptState, CodexLinkStatus, ComputerLinkStatus, QuotaLink, QuotaSnapshot, QuotaSourceStatus,
     ResetInventorySnapshot, ResetInventoryStatus, TaskSyncSnapshot, UpstreamFreshness,
@@ -24,7 +22,6 @@ use qrcode::{Color as QrColor, QrCode};
 use std::collections::HashMap;
 use std::io::Read;
 use std::mem::size_of;
-use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,7 +39,6 @@ use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 const APP_NAME: &str = "Codex额度";
 const APP_ICON_RESOURCE_ID: usize = 101;
-const HOST_PORT: u16 = 17_322;
 const TRAY_ICON_ID: u32 = 1;
 const TRAY_MESSAGE: u32 = WM_APP + 1;
 const MENU_PAIR: u32 = 1001;
@@ -83,14 +79,14 @@ const PAIRING_QR_SIZE: i32 = 286;
 const PAIRING_QR_TOP: i32 = 96;
 const PAIRING_HOOK_GUIDANCE: &str = "使用手机端「Codex额度」App 扫码";
 const PAIRING_APP_GUIDANCE: &str = "打开 App → 设置 → 连接电脑";
-const PAIRING_NETWORK_GUIDANCE: &str = "确保手机和电脑连接同一局域网";
+const PAIRING_NETWORK_GUIDANCE: &str = "手机与电脑可使用不同网络，状态通过 ntfy 密文中转";
 const PAIRING_TUTORIAL_BUTTON_LABEL: &str = "配对教学";
-const PAIRING_REFRESH_BUTTON_LABEL: &str = "刷新配对码";
+const PAIRING_REFRESH_BUTTON_LABEL: &str = "重新生成二维码";
 const PAIRING_TUTORIAL_STEPS: [&str; 4] = [
     "1. 在电脑托盘菜单中选择「安装/修复任务 Hook」",
     "2. 在 ChatGPT 中打开「设置 → 钩子」，并信任全部钩子",
     "3. 在手机端打开「Codex额度」App，进入「设置 → 连接电脑」",
-    "4. 扫描二维码或输入 6 位配对码完成配对",
+    "4. 扫描二维码保存 Relay 端到端加密凭据",
 ];
 const HOOK_INSTALLED_GUIDANCE: &str =
     "任务 Hook 已安装或修复。\n请在 ChatGPT 中打开「设置 → 钩子」，并信任全部钩子。";
@@ -100,9 +96,11 @@ static PAIRING_WINDOWS: OnceLock<Mutex<HashMap<isize, PairingWindowData>>> = Onc
 
 struct AppController {
     runtime: Arc<Runtime>,
-    host: Mutex<Option<WindowsHost>>,
+    host: Mutex<Option<RelayHost>>,
     quota_task: Mutex<Option<JoinHandle<()>>>,
     quota_state: Arc<RwLock<QuotaSnapshot>>,
+    task_state: Arc<RwLock<TaskSyncSnapshot>>,
+    relay_publisher: RelayLatestPublisher,
     upstream_confirmation_in_progress: Arc<AtomicBool>,
     last_upstream_confirmation_error: Arc<Mutex<Option<UpstreamConfirmationErrorCode>>>,
 }
@@ -112,7 +110,7 @@ impl AppController {
         self.host
             .lock()
             .ok()
-            .and_then(|host| host.as_ref().map(WindowsHost::active_sync_connections))
+            .and_then(|host| host.as_ref().map(|host| usize::from(host.relay_ready())))
             .unwrap_or(0)
     }
 
@@ -143,6 +141,8 @@ impl AppController {
             return false;
         }
         let quota_state = self.quota_state.clone();
+        let task_state = self.task_state.clone();
+        let relay_publisher = self.relay_publisher.clone();
         let confirmation_in_progress = self.upstream_confirmation_in_progress.clone();
         let last_upstream_confirmation_error = self.last_upstream_confirmation_error.clone();
         self.runtime.spawn(async move {
@@ -155,11 +155,19 @@ impl AppController {
             .ok()
             .flatten();
             if let Some((freshness, diagnostic)) = refreshed {
+                let confirmed = matches!(freshness.usage.status, UpstreamFreshnessStatus::Current);
                 if let Ok(mut quota) = quota_state.write() {
                     quota.upstream_freshness = freshness;
                 }
                 if let Ok(mut error) = last_upstream_confirmation_error.lock() {
                     *error = diagnostic;
+                }
+                if confirmed {
+                    let snapshot = quota_state.read().ok().map(|quota| quota.clone());
+                    let tasks = task_state.read().ok().map(|tasks| tasks.clone());
+                    if let (Some(quota), Some(tasks)) = (snapshot, tasks) {
+                        let _ = relay_publisher.submit(SyncPayload { quota, tasks });
+                    }
                 }
             }
             confirmation_in_progress.store(false, Ordering::Release);
@@ -167,8 +175,7 @@ impl AppController {
         true
     }
 
-    fn pairing_presentation(&self) -> Result<PairingPresentation, String> {
-        let addresses = private_ipv4_addresses().map_err(|error| error.to_string())?;
+    fn pairing_presentation(&self) -> Result<RelayPairingPresentation, String> {
         let host = self
             .host
             .lock()
@@ -177,7 +184,7 @@ impl AppController {
             .as_ref()
             .ok_or_else(|| "Windows 服务已停止".to_string())?;
         self.runtime
-            .block_on(host.begin_pairing(now_ms(), addresses))
+            .block_on(host.begin_pairing())
             .map_err(|error| error.to_string())
     }
 
@@ -201,7 +208,7 @@ impl AppController {
         }
         let host = self.host.lock().ok().and_then(|mut host| host.take());
         if let Some(host) = host {
-            let _ = self.runtime.block_on(host.shutdown());
+            host.shutdown();
         }
     }
 }
@@ -210,9 +217,7 @@ impl AppController {
 struct PairingWindowData {
     modules: Vec<bool>,
     width: usize,
-    pairing_code: String,
-    security_code: String,
-    manual_discovery_available: bool,
+    topic_hint: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -319,27 +324,23 @@ fn run(show_onboarding: bool) -> Result<(), String> {
         .filter(|quota| !matches!(quota.link.codex, CodexLinkStatus::Unavailable))
         .or_else(|| load_cached_snapshot(&snapshot_path, Utc::now()))
         .unwrap_or_else(|| unavailable_payload().quota);
-    let initial_payload = SyncPayload {
-        quota: initial_quota.clone(),
-        tasks: initial_tasks(now_ms()),
-    };
     let quota_state = Arc::new(RwLock::new(initial_quota.clone()));
+    let task_state = Arc::new(RwLock::new(initial_tasks(now_ms())));
     let upstream_confirmation_in_progress = Arc::new(AtomicBool::new(false));
-    let host = runtime
-        .block_on(WindowsHost::start(
-            HostPaths::in_data_directory(&data_directory),
-            SocketAddr::from((Ipv4Addr::UNSPECIFIED, HOST_PORT)),
-            initial_payload,
-        ))
-        .map_err(|error| error.to_string())?;
+    let host = RelayHost::start(
+        RelayHostPaths::in_data_directory(&data_directory),
+        "https://ntfy.sh",
+    )
+    .map_err(|error| error.to_string())?;
+    let relay_publisher = RelayLatestPublisher::new(host.publisher());
     let quota_task = start_quota_monitor(
         &runtime,
-        host.publisher(),
-        host.subscribe_refresh_requests(),
+        relay_publisher.clone(),
         collector,
         snapshot_path,
         Some(initial_quota),
         quota_state.clone(),
+        task_state.clone(),
         HookEventSpool::with_thread_index(
             data_directory.join("hook-events-v1"),
             hooks_config_path()?.with_file_name("session_index.jsonl"),
@@ -350,6 +351,8 @@ fn run(show_onboarding: bool) -> Result<(), String> {
         host: Mutex::new(Some(host)),
         quota_task: Mutex::new(Some(quota_task)),
         quota_state,
+        task_state,
+        relay_publisher,
         upstream_confirmation_in_progress,
         last_upstream_confirmation_error: Arc::new(Mutex::new(None)),
     }))
@@ -753,7 +756,7 @@ unsafe fn show_diagnostics_window() {
     SetTimer(window, DIAGNOSTICS_REFRESH_TIMER, 250, None);
 }
 
-unsafe fn show_pairing_window(presentation: PairingPresentation) -> Result<(), String> {
+unsafe fn show_pairing_window(presentation: RelayPairingPresentation) -> Result<(), String> {
     let data = pairing_window_data(presentation)?;
     let class_name = wide("CodexQuotaPairingWindow");
     let title = wide("Codex额度 · 连接手机");
@@ -786,11 +789,9 @@ unsafe fn show_pairing_window(presentation: PairingPresentation) -> Result<(), S
     Ok(())
 }
 
-fn pairing_window_data(presentation: PairingPresentation) -> Result<PairingWindowData, String> {
-    let discovery =
-        PairingDiscoveryAnnouncement::from_offer(&presentation.offer).map_err(str::to_string)?;
-    let security_code = discovery.security_code();
-    let manual_discovery_available = discovery.spawn_broadcast().is_ok();
+fn pairing_window_data(
+    presentation: RelayPairingPresentation,
+) -> Result<PairingWindowData, String> {
     let code = QrCode::new(presentation.deep_link.as_bytes()).map_err(|error| error.to_string())?;
     let width = code.width();
     let modules = code
@@ -801,9 +802,7 @@ fn pairing_window_data(presentation: PairingPresentation) -> Result<PairingWindo
     Ok(PairingWindowData {
         modules,
         width,
-        pairing_code: presentation.offer.code.clone(),
-        security_code,
-        manual_discovery_available,
+        topic_hint: presentation.topic_hint,
     })
 }
 
@@ -1574,9 +1573,9 @@ unsafe fn draw_diag_item(dc: HDC, parent: RECT, title: &str, detail: &str, color
 
 fn phone_connection_label(active_connections: usize) -> &'static str {
     if active_connections > 0 {
-        "已连接"
+        "Relay 已配置"
     } else {
-        "未连接"
+        "Relay 未配置"
     }
 }
 
@@ -2002,11 +2001,7 @@ unsafe fn paint_pairing_window(window: HWND) {
     SetTextColor(dc, UI_INK);
     draw_text(
         dc,
-        if data.manual_discovery_available {
-            "无法扫码？输入下方 6 位配对码"
-        } else {
-            "局域网发现不可用，请使用二维码"
-        },
+        "二维码内含 Relay v1 端到端加密凭据",
         bottom_layout.manual_guidance.left,
         bottom_layout.manual_guidance.top,
         bottom_layout.manual_guidance.right,
@@ -2017,11 +2012,7 @@ unsafe fn paint_pairing_window(window: HWND) {
     SetTextColor(dc, UI_PRIMARY);
     draw_text(
         dc,
-        if data.manual_discovery_available {
-            &data.pairing_code
-        } else {
-            "--"
-        },
+        "E2E v1",
         bottom_layout.pairing_code.left,
         bottom_layout.pairing_code.top,
         bottom_layout.pairing_code.right,
@@ -2032,11 +2023,7 @@ unsafe fn paint_pairing_window(window: HWND) {
     SetTextColor(dc, UI_MUTED);
     draw_text(
         dc,
-        &if data.manual_discovery_available {
-            format!("安全校验码 {} · 5 分钟内有效", data.security_code)
-        } else {
-            "关闭窗口后重试，或直接扫码".to_string()
-        },
+        &format!("主题校验 {} · ntfy 仅缓存密文 envelope", data.topic_hint),
         bottom_layout.security_code.left,
         bottom_layout.security_code.top,
         bottom_layout.security_code.right,
@@ -2719,12 +2706,12 @@ fn data_directory() -> Result<PathBuf, String> {
 
 fn start_quota_monitor(
     runtime: &Arc<Runtime>,
-    publisher: HostPublisher,
-    mut refresh_requests: tokio::sync::watch::Receiver<u64>,
+    publisher: RelayLatestPublisher,
     initial_collector: Option<QuotaCollector>,
     snapshot_path: PathBuf,
     initial_quota: Option<QuotaSnapshot>,
     quota_state: Arc<RwLock<QuotaSnapshot>>,
+    task_state: Arc<RwLock<TaskSyncSnapshot>>,
     hook_spool: HookEventSpool,
 ) -> JoinHandle<()> {
     runtime.spawn(async move {
@@ -2735,54 +2722,19 @@ fn start_quota_monitor(
         } else {
             None
         };
-        let mut current_tasks = initial_tasks(now_ms());
+        let mut current_tasks = task_state
+            .read()
+            .map(|tasks| tasks.clone())
+            .unwrap_or_else(|_| initial_tasks(now_ms()));
         let mut task_runtime = HookTaskRuntime::new();
         let mut quota_interval = tokio::time::interval(std::time::Duration::from_secs(5));
-        // Windows owns the upstream confirmation cadence. Android refresh requests are an
-        // additional trigger, not the only thing keeping an otherwise healthy connection fresh.
+        // Windows owns the upstream confirmation cadence. Android relay refresh never commands
+        // this collector; the phone only reconnects and reassesses its cached freshness.
         let mut upstream_confirmation_interval =
             tokio::time::interval(UPSTREAM_CONFIRMATION_INTERVAL);
         let mut hook_interval = tokio::time::interval(std::time::Duration::from_millis(200));
         loop {
             tokio::select! {
-                changed = refresh_requests.changed() => {
-                    if changed.is_err() {
-                        return;
-                    }
-                    upstream_confirmation_interval.reset();
-                    if collector.is_none() {
-                        collector = QuotaCollector::discover().ok();
-                    }
-                    if let Some(current) = collector.clone() {
-                        if let Ok((freshness, refreshed_quota)) = tokio::task::spawn_blocking(move || {
-                            let now = Utc::now();
-                            let freshness = current.refresh_upstream_freshness(now);
-                            let quota = current.collect(now).ok();
-                            (freshness, quota)
-                        })
-                        .await
-                        {
-                            if let Some(quota) = refreshed_quota {
-                                if matches!(quota.link.codex, CodexLinkStatus::Ok) {
-                                    let _ = save_cached_snapshot(&snapshot_path, &quota);
-                                    last_trusted_quota = Some(quota.clone());
-                                }
-                                current_quota = quota;
-                            } else {
-                                current_quota.upstream_freshness = freshness;
-                            }
-                            if let Ok(mut latest) = quota_state.write() {
-                                *latest = current_quota.clone();
-                            }
-                            publisher
-                                .publish(SyncPayload {
-                                    quota: current_quota.clone(),
-                                    tasks: current_tasks.clone(),
-                                })
-                                .await;
-                        }
-                    }
-                }
                 _ = upstream_confirmation_interval.tick() => {
                     if collector.is_none() {
                         collector = QuotaCollector::discover().ok();
@@ -2811,14 +2763,15 @@ fn start_quota_monitor(
                             if let Ok(mut latest) = quota_state.write() {
                                 *latest = current_quota.clone();
                             }
-                            publisher
-                                .publish(SyncPayload {
-                                    quota: current_quota.clone(),
-                                    tasks: current_tasks.clone(),
-                                })
-                                .await;
                         }
                     }
+                    // A low-frequency full snapshot proves Windows is still running even when
+                    // the upstream quota confirmation is unavailable. Quota freshness remains
+                    // the collector's own status and is not upgraded by this heartbeat.
+                    let _ = publisher.submit(SyncPayload {
+                        quota: current_quota.clone(),
+                        tasks: current_tasks.clone(),
+                    });
                 }
                 _ = quota_interval.tick() => {
                     if collector.is_none() {
@@ -2849,24 +2802,21 @@ fn start_quota_monitor(
                     if let Ok(mut latest) = quota_state.write() {
                         *latest = current_quota.clone();
                     }
-                    publisher
-                        .publish(SyncPayload {
-                            quota: current_quota.clone(),
-                            tasks: current_tasks.clone(),
-                        })
-                        .await;
+                    // The 5-second local collector only updates the tray/cache. Relay traffic is
+                    // reserved for confirmed upstream snapshots and task-state changes.
                 }
                 _ = hook_interval.tick() => {
                     if let Ok(Some(tasks)) =
                         task_runtime.poll(&hook_spool, now_ms(), chatgpt_is_foreground())
                     {
                         current_tasks = tasks;
-                        publisher
-                            .publish(SyncPayload {
-                                quota: current_quota.clone(),
-                                tasks: current_tasks.clone(),
-                            })
-                            .await;
+                        if let Ok(mut latest) = task_state.write() {
+                            *latest = current_tasks.clone();
+                        }
+                        let _ = publisher.submit(SyncPayload {
+                            quota: current_quota.clone(),
+                            tasks: current_tasks.clone(),
+                        });
                     }
                 }
             }
@@ -2925,8 +2875,8 @@ mod ui_contract_tests {
 
     #[test]
     fn diagnostics_reports_observable_phone_and_upstream_states() {
-        assert_eq!(phone_connection_label(0), "未连接");
-        assert_eq!(phone_connection_label(1), "已连接");
+        assert_eq!(phone_connection_label(0), "Relay 未配置");
+        assert_eq!(phone_connection_label(1), "Relay 已配置");
         let mut freshness = UpstreamFreshness::default();
         assert_eq!(upstream_usage_label(&freshness, false).0, "待同步");
         freshness.usage.status = UpstreamFreshnessStatus::Cached;
@@ -3040,7 +2990,10 @@ mod ui_contract_tests {
         assert_eq!((PAIRING_QR_SIZE, PAIRING_QR_TOP), (286, 96));
         assert_eq!(PAIRING_HOOK_GUIDANCE, "使用手机端「Codex额度」App 扫码");
         assert_eq!(PAIRING_APP_GUIDANCE, "打开 App → 设置 → 连接电脑");
-        assert_eq!(PAIRING_NETWORK_GUIDANCE, "确保手机和电脑连接同一局域网");
+        assert_eq!(
+            PAIRING_NETWORK_GUIDANCE,
+            "手机与电脑可使用不同网络，状态通过 ntfy 密文中转"
+        );
         assert_eq!(PAIRING_TUTORIAL_BUTTON_LABEL, "配对教学");
         assert_eq!(
             PAIRING_TUTORIAL_STEPS,
@@ -3048,7 +3001,7 @@ mod ui_contract_tests {
                 "1. 在电脑托盘菜单中选择「安装/修复任务 Hook」",
                 "2. 在 ChatGPT 中打开「设置 → 钩子」，并信任全部钩子",
                 "3. 在手机端打开「Codex额度」App，进入「设置 → 连接电脑」",
-                "4. 扫描二维码或输入 6 位配对码完成配对",
+                "4. 扫描二维码保存 Relay 端到端加密凭据",
             ]
         );
         assert_eq!(

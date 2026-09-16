@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.codex-quota.invalid/contract/relay-pairing-v1.schema.json",
+  "title": "CodexQuota relay pairing v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "type", "relayBaseUrl", "topic", "key", "deviceId"],
+  "properties": {
+    "protocolVersion": { "const": 1 },
+    "type": { "const": "relay_pairing" },
+    "relayBaseUrl": { "type": "string", "pattern": "^https://[^/?#]+/?$", "maxLength": 512 },
+    "topic": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+    "key": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+    "deviceId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{22}$" }
+  }
+}

@@ -25,6 +25,8 @@ import com.xiaomi.xms.wearable.message.OnMessageReceivedListener
 import com.xiaomi.xms.wearable.node.DataItem
 import com.xiaomi.xms.wearable.node.OnDataChangedListener
 import com.xiaomi.xms.wearable.node.Node
+import org.zxor.oronbox.xms.WearableBackend
+import org.zxor.oronbox.xms.WearableBackendConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -34,6 +36,31 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.atomic.AtomicBoolean
+
+internal class WearableBackendInitializer(
+  private val configureBackend: () -> Unit,
+) {
+  fun <T> initialize(apiFactory: () -> T): T {
+    configureBackend()
+    return apiFactory()
+  }
+}
+
+internal object XiaomiWearableBackend {
+  val requiredBackend: WearableBackend = WearableBackend.XIAOMI
+
+  fun initializer(context: Context): WearableBackendInitializer =
+    WearableBackendInitializer {
+      WearableBackendConfig.setBackend(context.applicationContext, requiredBackend)
+    }
+}
+
+private data class WearableApis(
+  val node: com.xiaomi.xms.wearable.node.NodeApi,
+  val auth: com.xiaomi.xms.wearable.auth.AuthApi,
+  val message: com.xiaomi.xms.wearable.message.MessageApi,
+  val notify: com.xiaomi.xms.wearable.notify.NotifyApi,
+)
 
 enum class BandConnectionCheckResult {
   Connected,
@@ -63,10 +90,19 @@ class XiaomiWearableBridge(
   private val repository: RuntimeStateRepository,
 ) {
   private val appContext = context.applicationContext
-  private val nodeApi = Wearable.getNodeApi(appContext)
-  private val authApi = Wearable.getAuthApi(appContext)
-  private val messageApi = Wearable.getMessageApi(appContext)
-  private val notifyApi = Wearable.getNotifyApi(appContext)
+  private val wearableApis =
+    XiaomiWearableBackend.initializer(appContext).initialize {
+      WearableApis(
+        node = Wearable.getNodeApi(appContext),
+        auth = Wearable.getAuthApi(appContext),
+        message = Wearable.getMessageApi(appContext),
+        notify = Wearable.getNotifyApi(appContext),
+      )
+    }
+  private val nodeApi = wearableApis.node
+  private val authApi = wearableApis.auth
+  private val messageApi = wearableApis.message
+  private val notifyApi = wearableApis.notify
   private val registrationState = WearableRegistrationState()
   private val refreshState = WearableRefreshState()
   private val mainHandler = Handler(Looper.getMainLooper())

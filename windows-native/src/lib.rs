@@ -6,6 +6,8 @@ pub mod host;
 pub mod network;
 pub mod pairing_discovery;
 pub mod quota;
+pub mod relay;
+pub mod relay_host;
 pub mod storage;
 
 use serde::{Deserialize, Serialize};
@@ -171,6 +173,26 @@ mod windows_dpapi {
         }
         Ok(output)
     }
+}
+
+#[cfg(windows)]
+pub(crate) fn protect_current_user_bytes(plaintext: &[u8]) -> Result<Vec<u8>, TlsIdentityError> {
+    windows_dpapi::protect(plaintext)
+}
+
+#[cfg(windows)]
+pub(crate) fn unprotect_current_user_bytes(ciphertext: &[u8]) -> Result<Vec<u8>, TlsIdentityError> {
+    windows_dpapi::unprotect(ciphertext)
+}
+
+#[cfg(not(windows))]
+pub(crate) fn protect_current_user_bytes(plaintext: &[u8]) -> Result<Vec<u8>, TlsIdentityError> {
+    Ok(plaintext.to_vec())
+}
+
+#[cfg(not(windows))]
+pub(crate) fn unprotect_current_user_bytes(ciphertext: &[u8]) -> Result<Vec<u8>, TlsIdentityError> {
+    Ok(ciphertext.to_vec())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

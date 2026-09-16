@@ -163,6 +163,52 @@ object QuotaWireContract {
       ),
     )
 
+  /** Encodes the quota v3 shape embedded by relay protocol v1. */
+  fun encodeV3(snapshot: QuotaSnapshot): String {
+    val freshness = requireNotNull(snapshot.upstreamFreshness) { "quota v3 requires upstream freshness" }
+    return json.encodeToString(
+      QuotaWireSnapshotV3(
+        protocolVersion = 3,
+        generatedAt = formatTimestamp(snapshot.generatedAtMs),
+        sourceStatus = snapshot.sourceStatus.toWire(),
+        limitsCollectedAt = snapshot.limitsCollectedAtMs?.let(::formatTimestamp),
+        windows = snapshot.windows.map { window ->
+          QuotaWireWindow(
+            id = window.id,
+            name = window.name,
+            windowMinutes = window.windowMinutes,
+            remainingPercent = window.remainingPercent,
+            resetsAt = formatTimestamp(window.resetsAtMs),
+            status = window.status.toWire(),
+          )
+        },
+        resetInventory =
+          QuotaWireResetInventoryV2(
+            status = snapshot.resetInventory.status.toWire(),
+            availableCount = snapshot.resetInventory.availableCount,
+            cachedAt = snapshot.resetInventory.cachedAtMs?.let(::formatTimestamp),
+            items = snapshot.resetInventory.items.map { item ->
+              QuotaWireResetItemV2(
+                status = WireResetItemStatus.Available,
+                grantedAt = item.grantedAtMs?.let(::formatTimestamp),
+                expiresAt = formatTimestamp(item.expiresAtMs),
+              )
+            },
+          ),
+        link =
+          QuotaWireLink(
+            computer = snapshot.computerLink.toWire(),
+            codex = snapshot.codexLink.toWire(),
+          ),
+        upstreamFreshness =
+          QuotaWireUpstreamFreshness(
+            usage = freshness.usage.toWire(::formatTimestamp),
+            resetInventory = freshness.resetInventory.toWire(::formatTimestamp),
+          ),
+      ),
+    )
+  }
+
   private fun decodeV1(payload: String): QuotaSnapshot {
     val wire = json.decodeFromString<QuotaWireSnapshotV1>(payload)
     require(wire.protocolVersion == 1) { "quota protocol does not match negotiation" }
@@ -549,3 +595,15 @@ private fun CodexLinkStatus.toWire() =
     CodexLinkStatus.Stale -> WireCodexLinkStatus.Stale
     CodexLinkStatus.FormatChanged -> WireCodexLinkStatus.FormatChanged
   }
+
+private fun UpstreamDatasetFreshness.toWire(formatTimestamp: (Long) -> String) =
+  QuotaWireDatasetFreshness(
+    status =
+      when (status) {
+        UpstreamFreshnessStatus.Current -> WireUpstreamFreshnessStatus.Current
+        UpstreamFreshnessStatus.Cached -> WireUpstreamFreshnessStatus.Cached
+        UpstreamFreshnessStatus.Unavailable -> WireUpstreamFreshnessStatus.Unavailable
+      },
+    lastAttemptAt = lastAttemptAtMs?.let(formatTimestamp),
+    lastSuccessAt = lastSuccessAtMs?.let(formatTimestamp),
+  )

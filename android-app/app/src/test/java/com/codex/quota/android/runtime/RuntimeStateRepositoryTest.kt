@@ -125,6 +125,39 @@ class RuntimeStateRepositoryTest {
   }
 
   @Test
+  fun relayCanRemainConnectedWhileWindowsSnapshotTimesOut() {
+    var clockMs = nowMs
+    val repository = RuntimeStateRepository(relayMode = true) { clockMs }
+    repository.ingestQuota(quotaPayload())
+    repository.markAuthenticatedWindowsSnapshot(nowMs)
+    repository.markTransportConnected()
+
+    clockMs += RuntimeStateRepository.WINDOWS_SNAPSHOT_TIMEOUT_MS + 1
+    repository.reassessQuotaFreshness()
+
+    val state = repository.state.value
+    assertEquals(SyncState.Offline, state.syncState)
+    assertEquals(DeviceLinkState.Disconnected, state.connections.computer)
+    assertEquals(61, state.weeklyQuota?.remainingPercent)
+    assertEquals(1, state.resetCredits.size)
+    assertEquals(nowMs, state.lastTransportDataAtMs)
+  }
+
+  @Test
+  fun oldCachedRelaySnapshotDoesNotMakeWindowsAppearOnline() {
+    val repository = RuntimeStateRepository(relayMode = true) {
+      nowMs + RuntimeStateRepository.WINDOWS_SNAPSHOT_TIMEOUT_MS + 1
+    }
+    repository.ingestQuota(quotaPayload())
+    repository.markAuthenticatedWindowsSnapshot(nowMs)
+    repository.markTransportConnected()
+
+    assertEquals(SyncState.Offline, repository.state.value.syncState)
+    assertEquals(DeviceLinkState.Disconnected, repository.state.value.connections.computer)
+    assertEquals(61, repository.state.value.weeklyQuota?.remainingPercent)
+  }
+
+  @Test
   fun partialRefreshRetainsOnlyUnexpiredTrustedResetData() {
     var clockMs = nowMs
     val repository = RuntimeStateRepository { clockMs }

@@ -18,14 +18,17 @@
 
 ## 1. 项目定位与当前版本
 
-CodexQuota 是一个 Android + Windows + 小米手环 10 的本地额度和任务状态看板：
+CodexQuota 是一个 Android + Windows + Xiaomi Smart Band 9 Pro（目标设备 / 适配中）的额度和任务状态看板：
 
-`ChatGPT Windows Hook → Windows 原生托盘程序 → 局域网加密同步 → Android Codex额度 → 小米运动健康/Wearable SDK → 手环 RPK`
+`ChatGPT Windows Hook → Windows 原生托盘程序 → AES-256-GCM → 公共 ntfy relay → Android Codex额度 → 小米运动健康/CleanRoom XMS SDK → Band 9 Pro`
 
 - 当前本地候选版本：`0.6.5`；Android 与手环内部安装序号均为 `607`，用于在不丢失本地数据的情况下覆盖此前版本。最近正式发布版本为 `0.6.4`。
 - 三端当前验收状态、临时版本差异和未决冲突以 `docs/current-status.md` 为唯一摘要；不要从单端
   构建记录推断三端已经一致。
 - 新架构只面向 Android；不为 iPhone 增加兼容层，也不把旧 AstroBox 桥接重新放回日常链路。
+- Windows 与 Android 不要求同一局域网；正式 runtime 不启动 LAN WSS listener、UDP discovery，也不创建防火墙入站规则。
+- relay 默认 `https://ntfy.sh`，只缓存 AES-256-GCM envelope；base URL 可配置，业务明文不得离开端设备。
+- Android 不依赖 proprietary XMS AAR；使用 `third_party/xms_wearable_sdk_cleanroom/` 固定源码，并在任何 Wearable API 前强制 Xiaomi backend。
 - AstroBox 只在首次安装或升级手环 RPK 时临时使用；日常手环连接、健康同步和普通手机通知由小米运动健康保持。
 - Windows、Android APK、手环 RPK 的产品版本号必须一致；协议兼容性由协议版本判断，不能只看产品版本。
 
@@ -34,22 +37,23 @@ CodexQuota 是一个 Android + Windows + 小米手环 10 的本地额度和任�
 ## 2. 不可违反的产品与隐私边界
 
 - 只传输额度摘要、重置信息、连接状态、同步时间和经过裁剪的任务状态/短标题。
-- 不读取或传输提示词、回复、工具参数、命令、文件路径、完整日志、Cookie、密码或账号内容。唯一例外是：Windows 可在本机读取 Codex 访问令牌，仅向官方额度接口发起低频确认；令牌只驻留进程内存，不写入日志、缓存、诊断或局域网同步，也不传给 Android 或手环。
+- 不读取或传输提示词、回复、工具参数、命令、文件路径、完整日志、Cookie、密码或账号内容。唯一例外是：Windows 可在本机读取 Codex 访问令牌，仅向官方额度接口发起低频确认；令牌只驻留进程内存，不写入日志、缓存、诊断或 relay payload，也不传给 Android 或手环。
 - 任务状态只来自已验证的官方 Hook：`PreToolUse/UserPromptSubmit → 处理中`、
   `PermissionRequest → 需要授权`、`Stop → 等待查看`。不要把“等待查看”改写成“已完成”。
 - Android 任务移除是本机任务板隐藏，不删除 ChatGPT 对话；任务出现新活动后允许自动恢复。
 - 默认通知时机是“仅在 ChatGPT 失焦时”；处理中静默，等待查看和需要授权使用无声、请求振动的通知通道，最终振动方式由手机系统设置决定；手机 App 自身前后台不额外抑制；手机和手环开关独立。
 - 不承诺 Android 被系统杀死后通知必达，不新增常驻前台服务或状态栏通知来掩盖后台限制。
-- 默认只在可信局域网运行，不新增云端中转、公网暴露、遥测、广告或自动崩溃上报。
+- 不新增自建服务器、遥测、广告或自动崩溃上报。公共 ntfy 是不受信任 relay，只能看到随机 topic、IP、时间和密文长度；不得看到业务明文。
 - 不把缓存冒充实时数据，不猜测缺失的额度、重置次数或重置后的百分比。
 
 ## 3. 代码边界与关键目录
 
 | 目录 | 责任 | 主要技术 |
 | --- | --- | --- |
-| `windows-native/` | Windows 托盘、Hook、额度采集、配对、TLS 1.3 WSS `/pair`/`/sync` | Rust 2024、Tokio、Rustls、Windows API |
-| `android-app/` | 手机看板、配对客户端、WSS 重连、通知决策、手环桥接 | Kotlin、Jetpack Compose、Android SDK、Xiaomi Wearable SDK |
-| `band-app/` | 小米手环 10 快应用和 212×520 页面 | Vela/AIoT UX、JavaScript |
+| `windows-native/` | Windows 托盘、Hook、额度采集、relay pairing、AES-GCM、ntfy publisher | Rust 2024、Tokio、reqwest、Windows API |
+| `android-app/` | 手机看板、relay QR、ntfy WebSocket、解密/防重放、通知、手环桥接 | Kotlin、Compose、OkHttp、CleanRoom XMS SDK |
+| `third_party/xms_wearable_sdk_cleanroom/` | 固定 commit 的 MIT CleanRoom XMS 源码 | Java、Android AIDL |
+| `band-app/` | 上游 Band 10 legacy RPK；Band 9 Pro 尚未开始 UI/watchface 实现 | Vela/AIoT UX、JavaScript |
 | `contract/` | 配对、额度、任务、同步流 JSON 契约 | JSON Schema |
 | `docs/` | 架构、ADR、安全、构建和真机验收证据 | Markdown |
 | `src/`、`astrobox-plugin/` | 0.4.0 以前的 Electron/AstroBox 历史实现 | legacy，只作回溯，不进入新架构主流程 |
@@ -65,7 +69,7 @@ Android 运行时的主要入口是 `CodexQuotaApplication`、`SyncWebSocketClie
 1. 在仓库根目录执行 `git status --short`，保留所有用户已有的修改和未跟踪文件。
 2. 阅读 `README.md`、`CHANGELOG.md`；涉及安全、构建或设备时补读对应文档。
 3. 先定位现有实现和测试，再决定最小修改范围。不要为“看起来更规范”顺手重写无关模块。
-4. 涉及手环 UI 时，先给用户看 212×520 预览；只有用户确认后才能改 RPK 源码和正式构建。
+4. Foundation 01 禁止实现 Band 9 Pro watchface/UI；后续涉及手环 UI 时先按目标设备真实规格给预览，用户确认后才能改正式源码。
 5. 先写/补测试，再实现；变更完成后运行与变更直接相关的自动测试，并说明真机仍需验证的部分。
 6. 交付时说明改动、测试、真机状态、产物和 Git/发布状态。用户明确说“验收通过”之前不得提交、推送、创建 Release 或上传构建产物。
 
@@ -77,7 +81,7 @@ Android 运行时的主要入口是 `CodexQuotaApplication`、`SyncWebSocketClie
 - 状态颜色只表达自身语义：蓝色为处理中和主题操作，绿色为充足、已同步、已完成，黄色为缺少、缓存和中度紧急，红色为警告、离线和需要人工介入。同步新鲜度只看同步胶囊；缓存不得把额度、任务或整个页面一起染黄。
 - 表单必须呈现真实的输入与焦点关系。分位输入从最左侧逐位推进，不得在装饰横线中央叠加系统光标；按钮优先使用现有紧凑样式，并与内容保持可点击的自然距离。
 - Windows 保持托盘优先的轻量原生界面，不照搬手机布局。普通页面只使用标题、正文、辅助文字三档；按钮同高、同圆角、同字重并保证抗锯齿，固定布局必须验证各区域不相交。主程序、安装包、快捷方式和托盘统一使用项目图标。
-- 手环严格遵守 `212×520` 画布、安全区、字号和胶囊边界。涉及手环 UI 时必须先给用户看预览，确认后才能修改 RPK 源码和正式构建。
+- `212×520` 是上游 Band 10 历史画布，不得直接当成 Band 9 Pro 规格。Foundation 不做 Band 9 Pro `336×480` 布局或 Lua watchface；后续 UI 必须先预览确认。
 - UI 交付不能只报告测试通过：Android 需要按改动范围检查真机浅色/深色、键盘展开/收起和可点击区域；Windows 需要检查实际 DPI 下的窗口与图标。新增页面若无法一眼看出它属于 CodexQuota，视为未完成。
 
 详细颜色、字号、组件和三端落地规则以 `docs/ui-design-system.md` 为准。
@@ -126,10 +130,10 @@ npm run build
 ## 7. 真机验收和发布规则
 
 - 自动测试不能代替 Windows、Android、手环三端真机验收。
-- 重点验收：首次二维码配对、Hook 事件和任务标题、失焦通知、锁屏/后台连接、手环提醒、离线缓存、重连、任务本机移除、RPK 页面可读性。
+- 重点验收：relay 二维码配对、Hook 事件和任务标题、ntfy cursor/replay、失焦通知、锁屏/后台与网络切换、手环提醒、离线缓存、重连和任务本机移除。
 - 用户已配置应用加锁、自启动和电池无限制；测试应使用短时、可重复的场景，不擅自安排长时间测试。
 - 预发布包留在本地；只有用户明确回复“验收通过”后，才可以进入提交、推送和 GitHub Release 流程。
-- 用户明确要求对本地候选进行真机验收时，Agent 负责覆盖安装 Windows 安装包和 Android APK，并将对应 RPK 复制到已通过 ADB 连接的手机 `Download` 目录；手环 RPK 的实际安装仍由用户通过 AstroBox 完成。除非用户另有说明，后续候选沿用此交付方式。
+- Foundation 01 不构建或交付 Band 9 Pro RPK/watchface。后续真机候选的安装方式由对应阶段另行确认。
 - 其他手环型号在没有对应真机验收前只能标注为“实验性适配”或“模拟器预览”，不得写成已支持。外部测试反馈只收集型号、应用版本、可复现步骤、可见状态和脱敏截图，不收集设备标识、账号信息或完整日志。
 
 ## 8. 处理不确定性

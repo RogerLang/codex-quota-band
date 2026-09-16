@@ -3,7 +3,7 @@
   "version": "0.6.5",
   "private": true,
   "type": "module",
-  "description": "Codex quota viewer for Xiaomi Smart Band 10",
+  "description": "Legacy Band 10 RPK retained while Xiaomi Smart Band 9 Pro adaptation is pending",
   "engines": {
     "node": ">=18"
   },

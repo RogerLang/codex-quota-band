@@ -1,53 +1,64 @@
 # CodexQuota 当前状态
 
-更新时间：2026-09-08。
+更新时间：2026-09-16。
 
-## 当前版本
+## Fork Foundation 01
 
-最近正式发布版本为 `0.6.4`；当前本地候选为 `0.6.5`，Android 与手环内部安装序号为 `607`，用于在不丢失本地数据的情况下覆盖此前版本。三端仍需完成 0.6.5 真机验收。
+当前工作区已完成 fork 后第一轮基础架构迁移，产品版本暂保持 `0.6.5`。Foundation 01 已获用户
+验收并获准提交、推送至 `origin/main`；没有创建 PR 或 GitHub Release，仍不是正式发布版本。
 
-`0.6.4` 由 Windows 接管 45 秒官方额度确认节拍，Android 与手环将短暂确认波动容忍窗口统一为两分钟，手环使用真实的上次确认时间。用户确认手机和手环均持续显示“已同步”；手机停止 52 秒的隔离测试确认 Windows 仍能独立刷新。手环协议和布局不变，现有 `0.6.3` RPK 兼容且无需强制重装。
+目标设备改为 **Xiaomi Smart Band 9 Pro**，状态只能写“目标设备 / 适配中”。Foundation 不实现
+Lua 真表盘、AOD、Vela → Lua 文件 IPC 或 Band 9 Pro 336×480 UI，也没有完成 Band 9 Pro 真机验收。
 
-`0.6.3` 在 `0.6.2` 基础上改进首次配对、安卓通知设置和 Windows 后台效率；手环业务代码保持已验收布局与协议，仅统一产品版本和安装序号。
+上游 `0.6.4` / `0.6.5` 曾对小米手环 10 完成或积累三端验证，这是 fork 起点的历史事实；它不能
+作为当前 fork 对 Band 9 Pro 的支持结论。
 
-## 0.6.5 本地候选
+## 已迁移基础
 
-- 三端显示名称统一为「Codex额度」，交付文件名统一为 `CodexQuota-Setup-0.6.5.exe`、`CodexQuota-0.6.5.apk` 和 `CodexQuota-0.6.5.rpk`。
-- 手环内部安装序号为 `607`；生命周期保护候选已通过 36 项手环自动测试，D2 真机连续打开退出 24 次未出现整机重启。
-- Windows 与安卓手机已完成 0.6.5 覆盖安装；手环 RPK 已复制到手机 `Download`，等待用户通过 AstroBox 安装。
-- 0.6.5 尚未提交、推送或发布 GitHub Release。
-
-## 当前能力
-
-| 组件 | 已验证能力 |
+| 范围 | 当前 Foundation 状态 |
 | --- | --- |
-| Windows | 托盘、二维码配对、额度确认、任务 Hook、加密局域网同步和连接诊断 |
-| 安卓手机 | 5 小时额度、周额度、任务看板、缓存状态、手环桥接、断线重连和检查更新 |
-| 小米手环 10 | 两页纵向 swiper、5 小时额度、周额度进度条、可用重置和任务页 |
+| Android XMS SDK | proprietary AAR 构建依赖已移除；源码集成 CleanRoom commit `6483f939785e9c1dd011465d573931f669a6adab` |
+| XMS backend | 在任何 `Wearable.get*Api()` 前强制 `WearableBackend.XIAOMI`，继续使用小米运动健康官方 service |
+| Windows transport | 正式入口使用 relay host，不启动 LAN WSS listener 或 UDP discovery |
+| Relay | 默认 `https://ntfy.sh`，Windows HTTPS POST，Android OkHttp WebSocket + replay cursor |
+| 加密 | relay protocol v1，AES-256-GCM、每消息随机 96-bit nonce、128-bit tag、magic + topic AAD |
+| 配对 | 二维码携带 HTTPS base URL、随机 topic、AES key、device ID 和 protocol version |
+| 凭据 | Windows DPAPI；Android Keystore + AES-GCM；不得进入日志和诊断 |
+| 防重放 | Windows sequence 持久递增；Android 持久化最后接受 sequence，拒绝重复和倒退 |
+| package identity | Android application ID 与 Vela identity 改为 `io.github.rogerlang.codexquota`；Kotlin namespace 暂不重命名 |
 
-## 0.6.4 发布内容
+旧 `host.rs`、`network.rs`、UDP discovery、WSS 协议与对应测试暂留作 legacy 回滚和对照，不属于正式
+runtime。旧 6 位配对没有被映射成公网协议；二维码是 Foundation 正式配对路径。
 
-- Windows 每 45 秒主动确认一次官方额度，手机后台请求不再是维持额度实时性的唯一来源。
-- 手机和手环将两次短暂确认延迟视为可容忍波动；最近成功确认超过两分钟才显示“缓存”。
-- Android 向手环传递额度最近一次官方确认时间，不再把旧缓存刚到达手环的时间显示成“缓存刚刚”。
-- 三端公开产物统一为 `0.6.4`；老用户可以只升级 Windows 和安卓手机，现有 `0.6.3` RPK 保持协议兼容。
+## 保持不变的产品边界
 
-## 0.6.3 发布内容
+- 只同步额度、重置、连接/新鲜度和裁剪后的任务状态/短标题。
+- 不同步提示词、回复、工具参数、命令、文件路径、完整日志、Cookie、密码或 Codex token。
+- `Stop` 仍显示“等待查看”，不表示“成功完成”。
+- `PermissionRequest` 与“等待查看”继续按通知设置产生手机/手环提醒；处理中静默。
+- 小米运动健康继续是手环主连接和健康同步应用；不使用 OronBox backend、Notify for Xiaomi、
+  Gadgetbridge、root 或 LSPosed。
+- Android 不新增常驻前台服务，也不承诺系统杀进程后的提醒必达。
 
-- Windows 与安卓手机已实现双路径首次配对：App 内置二维码扫描，以及 6 位配对码 + 双端安全校验码。手机连接页已按主应用设计系统重排，手动输入使用六个独立数字位且按钮不再贴底，并补充“打开 Windows 客户端 → 右键托盘 → 连接手机”的首次使用引导；Windows 配对窗口已收敛字体层级、放大主要信息并使用抗锯齿按钮。正式版扫码、Windows 单窗口复用和配对后立即刷新均已有自动测试与本轮真机检查。
-- Windows 主程序、原生窗口和安装界面已嵌入统一的多尺寸产品图标；构建脚本会检查 EXE 的 `ICON` / `GROUP_ICON` 资源，并继续执行静态运行库与独立启动检查。
-- Windows 额度采集在官方额度缓存可用时不再扫描旧版会话兜底数据。本机 59 个、约 488.5 MB 会话文件的 90 秒对比中，CPU 峰值由约 5.13% 降至 0.22%，平均值由约 0.51% 降至 0.012%，工作集由 33.8–130.1 MB 收敛至 16.4–16.6 MB。
-- 手动模式通过局域网自动发现电脑，不要求用户输入 IP；发现公告不包含配对码、长期令牌或账号内容。
-- 安卓“需要授权”和“等待查看”已改用无声、请求振动的新通知通道，实际振动与悬浮方式由手机系统设置决定；手机 App 自身位于前台不再吞掉提醒。提醒设置已精简为通知时机、手机通知、手环通知和系统通知设置，三档副标题随选择动态变化，分类级调整交给 Android 系统。自动测试、正式构建、覆盖安装和真机 UI 检查均已完成。
-- 三端版本声明已统一为 `0.6.3`，Android 与手环内部安装序号为 `605`。三端正式产物已通过自动验证并完成覆盖安装，最终真机联动验收与正式发布均已完成。
+## 已完成自动验证
 
-## 产品边界
+- Windows `cargo test --workspace` 全部通过，包含 relay protocol/runtime 与既有 legacy 回归测试。
+- Android `:app:testDebugUnitTest :app:lintDebug :app:lintValidation :app:assembleDebug
+  :app:assembleValidation` 全部通过；129 个 JVM 单测通过，Debug 和独立 Validation APK 均已组装。
+- Foundation 01V 独立 Android 验证 APK 的 7 项检查由用户在手机上确认全部 PASS；这是 Android 自发
+  synthetic data 到 ntfy 再由 Android 正式 subscriber 恢复的验收，不等于正式 Windows/Android 联动。
+- Foundation 01R 将无 cursor 的 latest 恢复与持久 cursor 恢复拆成 2 项；新版 8 项 APK 已构建，尚未
+  在用户手机上复测，因此不记录 8/8 真机 PASS。
+- 根目录 Node 契约/历史回归测试 44/44 通过；保留的 Band 10 legacy RPK 工程构建成功，36/36
+  built tests 通过。该构建只验证 package identity 与既有工程未损坏，不代表 Band 9 Pro 已适配。
 
-- 仅支持安卓手机；AstroBox 只用于侧载或升级手环 RPK。
-- 只同步额度摘要、重置摘要、连接状态、同步时间、短任务标题和任务状态。
-- 不读取或传输提示词、回复、命令、文件路径、Cookie、密码或令牌。
-- `等待查看` 只表示当前一轮停止并等待用户查看，不表示成功或失败。
+## 仍需真机或外部服务验证
 
-## 当前交付状态
+- Windows 公共 ntfy 随机虚构数据 smoke test 已通过；429/5xx/断网退避已由实现与 mock failure
+  路径覆盖，但未对公共服务故障注入。
+- 正式 Windows → Android 联动、Android 网络切换、后台/锁屏重连和持久 cursor recovery 真机行为；
+  旧版 Foundation 01V 的 7/7 PASS 不覆盖这些场景。
+- CleanRoom SDK + Xiaomi backend 在真实小米运动健康与 Band 9 Pro 上的连接、权限、消息和提醒。
+- Band 9 Pro RPK/package/signature 匹配；本轮不做 Lua watchface 或 UI。
 
-`0.6.4` 已于 2026-08-13 完成自动验证、Windows 与安卓手机覆盖安装、三端联动验收和正式发布。GitHub Release 的三个附件已完成远端 SHA-256 核对。
+在以上真机工作完成前，不得写“Band 9 Pro 已支持”。

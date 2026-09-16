@@ -29,7 +29,7 @@ android {
   testBuildType = instrumentationBuildType
 
   defaultConfig {
-    applicationId = "com.codex.quota.android"
+    applicationId = "io.github.rogerlang.codexquota"
     minSdk = 26
     targetSdk = 36
     // Keep the install sequence monotonic so 0.6.5 can replace earlier releases
@@ -52,6 +52,14 @@ android {
   }
 
   buildTypes {
+    create("validation") {
+      initWith(getByName("debug"))
+      applicationIdSuffix = ".validation"
+      versionNameSuffix = "-validation"
+      isDebuggable = true
+      signingConfig = signingConfigs.getByName("debug")
+      matchingFallbacks += listOf("debug")
+    }
     release {
       signingConfig = signingConfigs.findByName("release")
       isMinifyEnabled = true
@@ -83,7 +91,10 @@ android {
 
 if (
   !hasReleaseSigning &&
-    gradle.startParameter.taskNames.any { taskName -> taskName.contains("release", ignoreCase = true) }
+    gradle.startParameter.taskNames.any { taskName ->
+      taskName.contains("release", ignoreCase = true) &&
+        !taskName.contains("validation", ignoreCase = true)
+    }
 ) {
   throw GradleException(
     "Release signing is required. Set codexQuotaReleaseStoreFile, codexQuotaReleaseStorePassword, codexQuotaReleaseKeyAlias, and codexQuotaReleaseKeyPassword in ignored android-app/local.properties.",
@@ -95,7 +106,7 @@ kotlin {
 }
 
 dependencies {
-  implementation(files("libs/xms-wearable-lib_1.4_release.aar"))
+  implementation(project(":xms-wearable-lib-cleanroom"))
 
   val composeBom = platform("androidx.compose:compose-bom:2026.03.01")
   implementation(composeBom)

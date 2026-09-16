@@ -1,200 +1,113 @@
-<p align="right"><a href="README_EN.md">English</a></p>
+<p align="right"><a href="README_EN.md">English (upstream historical document)</a></p>
 
-# 小米手环 10 Codex额度
+# Xiaomi Smart Band 9 Pro Codex额度
 
-在电脑、安卓手机和小米手环 10 上查看 **Codex 5 小时额度、周额度、重置时间和当前任务状态**。
+CodexQuota 是一个正在适配 **Xiaomi Smart Band 9 Pro** 的非官方开源项目，用于在 Windows、
+Android 和手环侧查看 Codex 5 小时额度、周额度、重置时间和只读任务状态。
 
-<p align="center">
-  <img src="assets/icon.svg" alt="Codex额度图标" width="96">
-</p>
+> Band 9 Pro 当前是目标设备 / 适配中，尚未完成真机验收，不能视为已经支持。
+> 上游曾完成小米手环 10 的 RPK 与三端联动验证；这是 fork 起点的历史事实，不代表本 fork
+> 已完成 Band 9 Pro 验收。
 
-<p align="center">
-  <strong>当前版本：0.6.5</strong>
-</p>
+当前开发基线为未发布的 `0.6.5` Foundation。此轮只迁移通信、凭据和 SDK 基础设施，不实现
+Lua 真表盘、AOD、Vela → Lua 文件 IPC 或 336×480 布局。
 
-## 它能做什么
+## 架构
 
-- 在手机和手环上查看 Codex 5 小时额度、周额度和重置时间。
-- 查看 ChatGPT Windows 客户端中的任务状态：
-  `处理中`、`需要授权`、`等待查看`。
-- 在任务需要授权或等待查看时向手机、手环发送提醒。
-- 数据只在你的电脑、手机和手环之间传输，不经过本项目的云服务器。
+```text
+ChatGPT Windows Hook / 官方额度接口
+  → Windows CodexQuota
+  → relay protocol v1（AES-256-GCM）
+  → HTTPS POST https://ntfy.sh/<随机 topic>
+  → Android CodexQuota（ntfy WebSocket / replay API）
+  → RuntimeStateRepository
+  → 小米运动健康 + CleanRoom XMS SDK（强制 Xiaomi backend）
+  → Xiaomi Smart Band 9 Pro（适配中）
+```
 
-<table>
-  <tr>
-    <th align="center">手机首页</th>
-    <th align="center">手环首页</th>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/band-ui-preview/phone-home-real.jpg" alt="手机额度首页" width="240"></td>
-    <td align="center"><img src="docs/band-ui-preview/five-hour-primary-band.png" alt="手环额度首页" width="180"></td>
-  </tr>
-</table>
+- Windows 与 Android 不要求处于同一局域网，不需要固定 IP、端口转发、DDNS、VPN 或 Tailscale。
+- Windows 不监听 LAN 端口，也不为同步创建 Windows 防火墙入站规则。
+- 默认 relay 是 `https://ntfy.sh`；base URL 是配对凭据中的配置字段，未来可指向自建 ntfy。
+- ntfy message body 只包含版本化的加密 envelope；title、tags、priority、filename 等明文字段不承载业务信息。
+- ntfy 仍可观察随机 topic、源 IP、消息时间和密文长度，详见 [安全说明](docs/security.md)。
 
-## 使用前准备
+## 数据和状态边界
 
-你需要：
+只允许同步：额度白名单、重置摘要、同步时间、连接状态、经过裁剪的任务状态和短标题。
 
-- 一台 Windows 10 或 Windows 11 电脑；
-- 已登录并正常使用的 ChatGPT Windows 客户端；
-- 一台安卓 8.0 或更高版本的手机；
-- 小米手环 10；
-- 其他版本的小米手环暂未完成真机验证，可能出现页面错位或显示异常，请等待后续版本更新；
-- 手机中已安装「小米运动健康」，并已连接手环；
-- 手机和电脑连接同一个局域网。
+不会同步提示词、回复、工具参数、命令、终端输出、文件路径、Cookie、密码、完整日志或 Codex
+访问令牌。Windows 只在本机进程内使用 Codex 访问令牌向官方额度接口做低频确认。
 
-## 下载
+任务状态保持原语义：
 
-请从 [GitHub Releases](https://github.com/Vincent-hechuan/codex-quota-band/releases) 下载同一版本的三个文件。以下为 `0.6.5`：
+| Hook | 显示 | 提醒 |
+| --- | --- | --- |
+| `UserPromptSubmit` / `PreToolUse` | 处理中 | 静默 |
+| `PermissionRequest` | 需要授权 | 按用户设置提醒 |
+| `Stop` | 等待查看 | 按用户设置提醒 |
 
-| 安装位置 | 文件 |
-| --- | --- |
-| Windows 电脑 | `CodexQuota-Setup-0.6.5.exe` |
-| 安卓手机 | `CodexQuota-0.6.5.apk` |
-| 小米手环 10 | `CodexQuota-0.6.5.rpk` |
+“等待查看”只表示本轮 Hook 已停止，不表示成功完成。
 
-三个文件的版本号必须一致。不要从不明网站下载安装包。
+## 配对和刷新
 
-## 安装和连接
+Windows 首次启动或用户重新配对时生成 256-bit 随机 topic、256-bit AES key 和随机 device ID，
+通过二维码交给 Android。Windows 使用当前用户 DPAPI 保存 relay secret；Android 使用 Android
+Keystore + AES-GCM 保存。二维码不得进入日志或诊断。
 
-### 第一步：安装 Windows 程序
+旧 6 位局域网 discovery 配对代码暂留作 legacy 对照，但不属于正式 runtime，也没有被改造成不安全的
+公网 6 位配对协议。Foundation 的主要配对方式是二维码。
 
-1. 双击 `CodexQuota-Setup-0.6.5.exe`。
-2. 安装完成后，Codex额度会出现在任务栏右下角的通知区域；如果没有看到，请点击 `^`。
-3. 安装完成页会默认启动程序并显示配对二维码和 6 位配对码。
-4. 重启 ChatGPT，在「ChatGPT → 设置 → 钩子 → 信任全部钩子」中确认以下四项已开启：
-   `PreToolUse`、`PermissionRequest`、`UserPromptSubmit`、`Stop`。
+Android 的“刷新”在 relay v1 中只会重连 relay、恢复最新缓存 state 并重新计算 freshness；它不会承诺
+强制 Windows 立即请求 OpenAI。Windows 按自己的节拍独立确认官方额度。
 
-### 第二步：安装安卓应用
+## Xiaomi Wearable SDK
 
-1. 在手机上安装 `CodexQuota-0.6.5.apk`。
-2. 打开「小米运动健康」，确认手环仍然在线。
-3. 打开手机上的「Codex额度」。
-4. 建议在手机系统中为 Codex额度开启：
-   - 自启动；
-   - 应用加锁；
-   - 电池使用不受限制。
+Android 不再依赖开发者私有的 `xms-wearable-lib_1.4_release.aar`。仓库 vendored：
 
-这些设置能提高锁屏和后台同步的稳定性，但安卓系统仍可能在内存不足时结束应用。
+- upstream: `OrPudding/XMS_Wearable_SDK_CleanRoom`
+- pinned commit: `6483f939785e9c1dd011465d573931f669a6adab`
+- license: MIT
 
-### 第三步：连接手机和电脑
+来源记录见 [UPSTREAM.md](third_party/xms_wearable_sdk_cleanroom/UPSTREAM.md)。运行时在第一次
+`Wearable.get*Api()` 前强制选择 `WearableBackend.XIAOMI`，继续绑定小米运动健康的官方 XMS service，
+不使用 OronBox backend，也不要求 Notify for Xiaomi、Gadgetbridge、root 或 LSPosed。
 
-1. 确认手机和电脑连接同一个局域网。
-2. 右键 Windows 通知区域中的「Codex额度」，选择「连接手机…」。
-3. 在手机「Codex额度 → 设置」中点击「连接电脑」。
-4. 优先选择「扫描二维码」，直接使用 Codex额度内置相机扫描；无法扫码时选择「输入配对码」。
-5. 手动配对时输入 Windows 显示的 6 位数字，并确认手机与电脑显示的安全校验码一致。
-6. 配对成功后，手机首页会显示电脑“已连接”，额度和任务会自动同步。
+## 从源码构建
 
-二维码和配对码只在 5 分钟内有效，并且成功使用一次后立即失效。手动配对会自动查找同一局域网中的电脑，不需要填写 IP 地址。
-Windows 已有配对窗口时，再次点击托盘入口只会把原窗口置前；需要新二维码或配对码时，点击窗口底部的“刷新配对码”。
+Windows：
 
-### 第四步：安装手环应用
+```powershell
+Set-Location windows-native
+cargo test --workspace
+cargo build --release --bin codex_quota_windows
+```
 
-AstroBox 只在安装或升级手环应用时临时使用，不参与日常同步。
+Android：
 
-1. 临时打开 [AstroBox](https://astrobox.online/downloads/)。
-2. 进入已连接的小米手环 10 设备页面。
-3. 打开「快应用数量」右上角的设置。
-4. 点击 `+`，导入 `CodexQuota-0.6.5.rpk`。
-5. 等待安装动画结束。
-6. 安装完成后退出 AstroBox，重新确认「小米运动健康」仍显示手环已连接。
-7. 在手机「Codex额度 → 设置」中点击「检查手环连接」，按系统提示授权。
-8. 打开手环上的「Codex额度」，数据通常会在几秒内出现。
+```powershell
+Set-Location android-app
+$env:JAVA_HOME = '<JDK 17 path>'
+$env:ANDROID_HOME = '<Android SDK path>'
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+..\spikes\android-background-probe\gradlew.bat -p . :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
+```
 
-## 日常使用
+Android runtime application ID 与 Vela package identity 均为 `io.github.rogerlang.codexquota`；Kotlin
+源码 namespace 暂保留 `com.codex.quota.android`，避免 Foundation 夹带大规模包重命名。
 
-平时只需要保持以下程序正常运行：
+## 当前限制
 
-- Windows 通知区域中的 Codex额度；
-- 安卓手机上的 Codex额度；
-- 小米运动健康。
+- Band 9 Pro 尚未进行真实安装、通信、提醒、表盘和布局验收。
+- Android 不使用常驻前台服务；进程被系统杀死后不承诺提醒必达。
+- 公共 ntfy 是第三方 relay，虽然看不到业务明文，仍有上述 metadata 可见性和公共服务可用性限制。
+- Foundation 01 已获用户验收；尚未创建 PR 或 Release，构建产物不得被描述为正式发布版本。
 
-AstroBox 可以退出。
+## 开发文档
 
-状态含义：
-
-| 状态 | 含义 |
-| --- | --- |
-| 已同步 | 最近一次额度确认仍然有效 |
-| 缓存 | 显示的是上一次可信数据，不是实时数据 |
-| 离线 | 手机无法连接电脑或手环 |
-| 处理中 | ChatGPT 正在处理任务 |
-| 需要授权 | ChatGPT 正在等待你确认操作 |
-| 等待查看 | 当前一轮已经停下，等待你查看结果；不代表成功或失败 |
-
-如果上游暂时没有提供 5 小时额度，手机和手环会显示 `-- / 暂无数据`，不会猜测额度。
-
-## 检查更新
-
-手机「Codex额度 → 设置 → 检查更新」会检查本项目公开的 GitHub Release：
-
-- 已是最新版时会显示提示；
-- 有新版本时会先显示版本和更新说明；
-- 只有你点击“前往下载”后才会打开 GitHub；
-- 不会自动下载或安装。
-
-## 常见问题
-
-### 手机扫码后连不上电脑
-
-- 确认手机和电脑在同一个局域网；两端都能上网不代表在同一个局域网。
-- 不要使用访客 Wi-Fi、公共 Wi-Fi 或启用了设备隔离的网络。
-- 首次启动时，允许 Codex额度通过 Windows 防火墙的专用网络。
-- 在 Windows 通知区域打开「连接与诊断…」查看具体状态。
-
-### 手机锁屏后显示缓存
-
-在手机系统中为 Codex额度开启自启动、应用加锁和电池使用不受限制。不同品牌手机的设置名称可能略有不同。
-
-### 手环显示离线或不更新
-
-1. 确认「小米运动健康」仍显示手环已连接。
-2. 完全退出 AstroBox，避免它继续占用手环连接。
-3. 确认手机、手环安装的是同一版本。
-4. 在手机 Codex额度的设置中点击「检查手环连接」。
-
-### 任务状态不可用
-
-1. 在 Windows 通知区域选择「安装/修复任务 Hook」。
-2. 重启 ChatGPT。
-3. 打开「ChatGPT → 设置 → 钩子 → 信任全部钩子」。
-4. 确认四项 Hook 均已开启，然后新建一个任务测试。
-
-### 5 小时额度显示 `--`
-
-这表示当前上游数据中还没有 5 小时额度，不是同步失败。周额度、任务和手环连接仍可正常使用；上游提供数据后会自动显示。
-
-### 重装后可用重置次数显示 `--`
-
-打开 ChatGPT 的使用量页面，展开额度重置相关内容并等待加载完成，然后在 Windows 通知区域选择「刷新当前状态」。
-
-## 隐私说明
-
-- 不读取或传输你的提示词、回复、命令、文件路径、终端输出或完整日志。
-- 不读取 ChatGPT Cookie 或登录密码。
-- Windows 只在本机使用现有 Codex 访问令牌查询官方额度；令牌不会写入项目日志、诊断、手机或手环。
-- 手机与电脑通过加密连接在局域网中同步。
-- 不包含广告、遥测或自动崩溃上报。
-- 请勿把 Windows 同步端口暴露到公网。
-
-更多说明见 [安全说明](docs/security.md)。
-
-## 卸载
-
-- Windows：在「设置 → 应用 → 已安装的应用」中卸载 Codex额度。
-- 安卓手机：直接卸载 Codex额度。
-- 小米手环：通过 AstroBox 卸载 Codex额度。
-
-## 开源与开发
-
-这是社区制作的开源项目，不是 OpenAI、小米或 AstroBox 的官方产品。
-
-源码使用 [MIT License](LICENSE)。开发者可阅读：
-
+- [当前状态](docs/current-status.md)
 - [架构说明](docs/architecture.md)
 - [开发指南](docs/development-guide.md)
 - [安全说明](docs/security.md)
 - [贡献指南](CONTRIBUTING.md)
 
-从源码构建安卓应用需要自行从小米官方开发者渠道取得 Wearable SDK。该第三方二进制不随仓库分发。
+源码使用 [MIT License](LICENSE)。本项目不是 OpenAI、小米、ntfy、AstroBox 或 OrPudding 的官方产品。

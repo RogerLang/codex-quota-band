@@ -1,5 +1,5 @@
 {
-  "package": "com.codex.quota.android",
+  "package": "io.github.rogerlang.codexquota",
   "name": "Codex额度",
   "versionName": "0.6.5",
   "versionCode": 607,

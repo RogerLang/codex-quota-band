@@ -734,7 +734,7 @@ private fun SettingsScreen(
     item { SettingsPageHeader(state, nowMs) }
     item {
       SettingsGroup("连接与设备") {
-        SettingsActionRow("连接电脑", "扫描二维码或输入配对码", "›", onConnectComputer)
+        SettingsActionRow("连接电脑", "扫描 Relay 配对二维码", "›", onConnectComputer)
       }
     }
     item {

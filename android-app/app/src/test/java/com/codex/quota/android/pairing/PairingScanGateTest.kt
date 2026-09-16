@@ -8,7 +8,7 @@ class PairingScanGateTest {
   @Test
   fun acceptsOneCodexPairingLinkAndIgnoresOtherQrContent() {
     val gate = PairingScanGate()
-    val pairingLink = "codexquota://pair?offer=abc123"
+    val pairingLink = "codexquota://pair?relay=abc123"
 
     assertNull(gate.accept("https://example.com"))
     assertEquals(pairingLink, gate.accept(pairingLink))

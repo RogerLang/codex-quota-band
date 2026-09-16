@@ -30,6 +30,7 @@ enum class IngestResult {
 
 class RuntimeStateRepository(
   private val taskVisibility: TaskVisibilityStore = InMemoryTaskVisibilityStore(),
+  private val relayMode: Boolean = false,
   private val clock: () -> Long = System::currentTimeMillis,
 ) {
   private val lock = Any()
@@ -42,6 +43,7 @@ class RuntimeStateRepository(
   private var bandConnected = false
   private var taskSequenceInConnection: Long? = null
   private var lastTransportDataAtMs: Long? = null
+  private var lastAuthenticatedWindowsSnapshotAtMs: Long? = null
 
   val state: StateFlow<AppUiState> = mutableState.asStateFlow()
 
@@ -70,6 +72,16 @@ class RuntimeStateRepository(
       if (!transportConnected) taskSequenceInConnection = null
       transportConnected = true
       lastTransportDataAtMs = clock()
+      publish()
+    }
+  }
+
+  fun markAuthenticatedWindowsSnapshot(generatedAtMs: Long) {
+    synchronized(lock) {
+      if (!transportConnected) taskSequenceInConnection = null
+      transportConnected = true
+      lastTransportDataAtMs = clock()
+      lastAuthenticatedWindowsSnapshotAtMs = generatedAtMs
       publish()
     }
   }
@@ -151,8 +163,14 @@ class RuntimeStateRepository(
   private fun publish() {
     val nowMs = clock()
     val quota = quotaSnapshot
+    val lastComputerProofAtMs =
+      if (relayMode) lastAuthenticatedWindowsSnapshotAtMs else lastTransportDataAtMs
     val computerOnline =
-      transportConnected && quota?.computerLink != ComputerLinkStatus.Offline
+      transportConnected &&
+        quota?.computerLink != ComputerLinkStatus.Offline &&
+        lastComputerProofAtMs?.let { proofAt ->
+          nowMs - proofAt in 0..WINDOWS_SNAPSHOT_TIMEOUT_MS
+        } == true
     val effectiveResetInventory =
       when {
         quota?.resetInventory?.status?.isTrusted() == true &&
@@ -268,11 +286,14 @@ class RuntimeStateRepository(
       (availableCount != null && items.isEmpty()) ||
       items.any { it.expiresAtMs > nowMs }
 
-  private companion object {
+  internal companion object {
     const val WEEKLY_WINDOW_MINUTES = 10_080
     const val FIVE_HOUR_WINDOW_MINUTES = 300
     // Windows confirms every 45 seconds. Two minutes tolerates two delayed attempts without
     // presenting genuinely old quota as current.
     const val CURRENT_QUOTA_MAX_AGE_MS = 120_000L
+    // Three 45-second publish intervals allow transient relay delays without treating a
+    // connected ntfy socket as proof that the Windows publisher is still running.
+    const val WINDOWS_SNAPSHOT_TIMEOUT_MS = 135_000L
   }
 }

@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.codex-quota.invalid/contract/relay-payload-v1.schema.json",
+  "title": "CodexQuota decrypted relay snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "sequence", "generatedAtMs", "quota", "tasks", "chatGptState", "chatGptFocused"],
+  "properties": {
+    "protocolVersion": { "const": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "generatedAtMs": { "type": "integer", "minimum": 0 },
+    "quota": { "$ref": "snapshot-v3.schema.json" },
+    "chatGptState": { "enum": ["running", "not_running", "hook_unavailable"] },
+    "chatGptFocused": { "type": "boolean" },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["conversationId", "title", "state", "updatedAtMs"],
+        "properties": {
+          "conversationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 16 },
+          "state": { "enum": ["running", "needs_authorization", "waiting_for_review"] },
+          "activity": { "enum": ["executing_command", "modifying_files", "using_browser"] },
+          "updatedAtMs": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

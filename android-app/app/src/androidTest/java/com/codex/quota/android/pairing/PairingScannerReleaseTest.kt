@@ -2,8 +2,8 @@ package com.codex.quota.android.pairing
 
 import android.Manifest
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -11,6 +11,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -30,6 +31,9 @@ class PairingScannerReleaseTest {
   fun releaseScannerOpensAfterCameraPermissionWithoutCrashing() {
     compose.onNodeWithText("扫描二维码").performClick()
     compose.onNodeWithText("对准 Windows 上的配对二维码").assertIsDisplayed()
-    compose.onNodeWithText("扫码功能暂不可用", substring = true).assertDoesNotExist()
+    assertEquals(
+      0,
+      compose.onAllNodesWithText("扫码功能暂不可用", substring = true).fetchSemanticsNodes().size,
+    )
   }
 }

@@ -69,6 +69,26 @@ object TaskWireContract {
     )
   }
 
+  fun encode(snapshot: TaskSnapshot): String =
+    json.encodeToString(
+      TaskWireSnapshot(
+        protocolVersion = PROTOCOL_VERSION,
+        sequence = snapshot.sequence,
+        generatedAtMs = snapshot.generatedAtMs,
+        chatGptState = snapshot.chatGptState.toWire(),
+        chatGptFocused = snapshot.chatGptFocused,
+        tasks = snapshot.tasks.map { task ->
+          TaskWireItem(
+            conversationId = task.conversationId,
+            title = task.title,
+            state = task.state.toWire(),
+            activity = task.activity?.toWire(),
+            updatedAtMs = task.updatedAtMs,
+          )
+        },
+      ),
+    )
+
   private const val PROTOCOL_VERSION = 1
   private const val MAX_PAYLOAD_BYTES = 64 * 1024
 }
@@ -132,4 +152,25 @@ private fun WireActivity.toDomain() =
     WireActivity.ExecutingCommand -> SafeActivity.ExecutingCommand
     WireActivity.ModifyingFiles -> SafeActivity.ModifyingFiles
     WireActivity.UsingBrowser -> SafeActivity.UsingBrowser
+  }
+
+private fun ChatGptState.toWire() =
+  when (this) {
+    ChatGptState.Running -> WireChatGptState.Running
+    ChatGptState.NotRunning -> WireChatGptState.NotRunning
+    ChatGptState.HookUnavailable -> WireChatGptState.HookUnavailable
+  }
+
+private fun TaskState.toWire() =
+  when (this) {
+    TaskState.Running -> WireTaskState.Running
+    TaskState.NeedsAuthorization -> WireTaskState.NeedsAuthorization
+    TaskState.WaitingForReview -> WireTaskState.WaitingForReview
+  }
+
+private fun SafeActivity.toWire() =
+  when (this) {
+    SafeActivity.ExecutingCommand -> WireActivity.ExecutingCommand
+    SafeActivity.ModifyingFiles -> WireActivity.ModifyingFiles
+    SafeActivity.UsingBrowser -> WireActivity.UsingBrowser
   }

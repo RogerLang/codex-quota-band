@@ -37,7 +37,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Computer
-import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -100,7 +99,6 @@ internal fun CodexPairingFlow(
         PairingChoice(
           onClose = onClose,
           onScan = { mode = PairingMode.Scan },
-          onManual = { mode = PairingMode.Manual },
         )
       PairingMode.Scan ->
         PairingScanner(
@@ -117,10 +115,10 @@ internal fun CodexPairingFlow(
 }
 
 @Composable
-private fun PairingChoice(onClose: () -> Unit, onScan: () -> Unit, onManual: () -> Unit) {
+private fun PairingChoice(onClose: () -> Unit, onScan: () -> Unit) {
   PairingPage(
     title = "连接电脑",
-    subtitle = "手机和电脑需要连接同一个局域网",
+    subtitle = "通过 ntfy 密文中转，无需连接同一局域网",
     onBack = onClose,
   ) {
     Text(
@@ -139,17 +137,10 @@ private fun PairingChoice(onClose: () -> Unit, onScan: () -> Unit, onManual: () 
           icon = { Icon(Icons.Outlined.QrCodeScanner, contentDescription = null) },
           onClick = onScan,
         )
-        PairingDivider()
-        PairingActionRow(
-          title = "输入配对码",
-          supporting = "无法扫码时输入 Windows 显示的 6 位数字",
-          icon = { Icon(Icons.Outlined.Dialpad, contentDescription = null) },
-          onClick = onManual,
-        )
       }
     }
     Text(
-      "二维码和配对码仅限本次连接，5 分钟内有效",
+      "二维码中的 Relay 凭据只在手机本地加密保存",
       modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
       fontSize = CodexTokens.Type.Caption,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -230,7 +221,7 @@ private fun PairingScanner(onBack: () -> Unit, onPairingLink: (String) -> Unit) 
       }
     }
     Text(
-      "扫码不可用时，可以返回并输入 6 位配对码",
+      "扫码不可用时，请返回重试或在 Windows 重新生成二维码",
       modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
       textAlign = TextAlign.Center,
       fontSize = CodexTokens.Type.Caption,
@@ -258,7 +249,7 @@ private fun CameraPreview(onPairingLink: (String) -> Unit) {
   if (scanner == null) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
       Text(
-        "扫码功能暂不可用\n请返回并输入配对码",
+        "扫码功能暂不可用\n请返回重试",
         modifier = Modifier.padding(24.dp),
         textAlign = TextAlign.Center,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

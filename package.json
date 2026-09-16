@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "main": "src/desktop/electron-main.js",
-  "description": "Privacy-first Codex quota bridge for Xiaomi Smart Band 10",
+  "description": "Privacy-first Codex quota bridge targeting Xiaomi Smart Band 9 Pro",
   "scripts": {
     "prestart": "npm run icon:generate",
     "start": "electron .",

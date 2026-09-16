@@ -1,247 +1,140 @@
-# CodexQuota 0.6.5 架构说明
+# CodexQuota Foundation 01 架构
 
-本文是给开发者和未来 Agent 的实现说明。产品取舍和“不做什么”以根目录
-`CONTEXT.md` 为准；这里记录当前代码应当如何协作。
+本文记录 fork 当前正式 runtime。产品语义以根目录 `CONTEXT.md` 为准，迁移/验收状态以
+`docs/current-status.md` 为准。
 
-## 1. 系统目标
+## 系统目标
 
-CodexQuota 让用户在不抢占小米运动健康主连接的前提下，在手机和小米手环上查看：
-
-- Codex 5 小时额度、周额度、下次重置时间和可用重置次数；
-- 官方 ChatGPT Windows 客户端任务的只读状态；
-- “等待查看”和“需要授权”的手机/手环提醒。
-
-当前产品是 Android-only 的本地工具，不是 ChatGPT 客户端替代品，也不提供反向控制、回复消息或远程操作电脑。
-
-## 1.1 当前正式版本状态
-
-三端当前验收状态、临时版本差异和未决产品冲突以 [current-status.md](current-status.md) 为准。本节只记录
-当前代码和协议事实，不能据此覆盖 `CONTEXT.md` 中已经确认的产品交互。
-
-- 当前代码与配置基线：本地候选版本 `0.6.5`，Windows、Android APK 和手环 RPK 按同一产品版本管理；Android 与手环内部安装序号均为 `607`，用于在不丢失本地数据的情况下覆盖此前版本。
-- 自动化验证和产物哈希以 [build-verification.md](build-verification.md) 中的 `0.6.5` 本地候选记录为准。
-- 前一轮已完成的真机链路：二维码配对、额度同步、任务标题与状态、任务本机移除、失焦/锁屏通知、手环提醒，
-  以及 Windows 安装器启动和覆盖安装流程；Android 手机 App 的首页、任务页和设置页已通过用户最终验收。
-- Android UI 当前实现：以 5 小时额度圆环为第一层级，在同一卡片内用横向进度条显示周额度；额度继续按真实百分比使用红/黄/绿，缓存/离线只改变同步胶囊的黄色/红色状态。电脑与手环合并为统一胶囊；设置页提供统一“连接电脑”、任务标题、诊断和公开 GitHub Release 检查入口，手环连接检查集成在首页手环半区。
-- Android quota v3 已接入：Client Hello 声明 `[1,2,3]`，按 Server Hello 保存并严格校验 quota
-  version；v2/v3 重置卡只保留状态、`grantedAt`、`expiresAt`。v3 额外使用脱敏的
-  `upstreamFreshness` 区分上游已确认、缓存和待确认，v1/v2 回退保持兼容。
-- 已确认的使用前提：手机和电脑必须在同一可信局域网；ChatGPT 中需要在「设置 → 钩子 → 信任全部钩子」中确认
-  Hooks；AstroBox 只用于侧载或升级 RPK。
-- Windows 原生端的可见界面保持托盘优先：配对窗口集中提供二维码、配对码和安全校验码，连接与诊断只展示可验证的服务、手机
-  和同步状态，不推断 Hook 信任；撤销手机配对会主动关闭现有同步连接，使手机无需重启即可进入离线状态。
-- 重置卡的准确发卡/到期时间由 Windows 单点读取本机 `.codex/auth.json` 后直接查询；访问令牌仅驻留在
-  Windows 进程内存。Windows 只本地缓存并向下游白名单化传递可用数量、`grantedAt`、`expiresAt`，不传令牌、
-  Cookie、卡片唯一 ID、标题、描述或原始响应。
-- 配对后的额度协议保持协商式兼容：客户端声明 v1 时继续收到 v1，声明 v2 时收到无卡片身份字段的
-  重置卡时间摘要，只有声明 v3 才收到上游新鲜度。任何快照都必须与当前连接的 Server Hello 匹配。
-- 验收与发布状态：`0.6.5` 已完成自动验证并覆盖安装 Windows；Android APK 和手环 RPK 仅保留在本地，尚未完成本轮真机验收。
-
-## 2. 运行链路
+目标设备是 **Xiaomi Smart Band 9 Pro（适配中）**。小米运动健康继续承担手环主连接、健康数据
+和普通通知；CodexQuota 只增加额度、只读任务状态与提醒。Android 和手环不批准/拒绝操作，也不
+反向控制 ChatGPT。
 
 ```mermaid
 flowchart LR
-  H["ChatGPT Windows 官方客户端<br/>官方 Hook 事件"]
-  W["Windows 原生托盘程序<br/>Rust<br/>额度采集 + 任务归并"]
-  A["Android Codex额度<br/>Kotlin/Compose<br/>WSS 客户端 + 看板 + 通知"]
-  M["小米运动健康<br/>手环主连接/健康/普通通知"]
-  B["小米手环 10 RPK<br/>212×520 快应用"]
-  H -->|裁剪后的任务状态| W
-  W -->|TLS 1.3 WSS /sync| A
-  A -->|Wearable SDK| M
-  M --> B
-  A -->|手机系统通知| P[Android 通知栏/锁屏]
-  I[AstroBox] -.首次安装/升级 RPK.- B
+  C[ChatGPT Windows<br/>Hook + official quota] --> W[Windows CodexQuota<br/>Rust]
+  W --> E[AES-256-GCM<br/>relay envelope v1]
+  E -->|HTTPS POST| N[public ntfy relay<br/>default ntfy.sh]
+  N -->|WebSocket + replay cursor| A[Android CodexQuota<br/>decrypt + RuntimeStateRepository]
+  A --> P[Android notifications]
+  A --> X[CleanRoom XMS SDK<br/>WearableBackend.XIAOMI]
+  X --> M[小米运动健康]
+  M --> B[Xiaomi Smart Band 9 Pro<br/>target / adapting]
 ```
 
-AstroBox 不在当前 Android 架构的日常数据和提醒链路中。安装或升级 RPK 后可以退出，日常连接继续交给小米运动健康。
+Windows 和 Android 不要求处于同一局域网。正式 runtime 不启动 UDP discovery、LAN WSS
+`/pair`/`/sync` listener，也不创建防火墙入站规则。`windows-native/src/host.rs`、`network.rs`、
+`pairing_discovery.rs` 与 Android 旧 WSS 类暂时保留为 legacy 对照。
 
-## 2.1 Windows UI 与新手流程（当前正式实现）
+## Windows
 
-Windows 原生端采用托盘优先的单实例行为，没有常驻主窗口。托盘菜单实际提供：
+入口仍是 `windows-native/src/bin/codex_quota_windows.rs`：
 
-- 「刷新当前状态」；
-- 「连接手机…」；
-- 「连接与诊断…」；
-- 「撤销手机配对」；
-- 「安装/修复任务 Hook…」；
-- 默认开启且带勾选状态的「登录 Windows 时自动启动」；
-- 「退出」。
+- `QuotaCollector` 独立按低频节拍确认官方额度；relay 故障不停止本地采集和缓存。
+- `HookTaskRuntime` 只归并官方 Hook 的裁剪状态和最多 16 字短标题。
+- 正式入口创建 `RelayHost`，不创建 `WindowsHost` / `TcpListener`。
+- `RelayCredentialStore` 生成并用当前用户 DPAPI 保存随机 topic、AES key 和 device ID。
+- `RelaySequenceStore` 在每次发送前持久化新的单调 sequence，进程重启不回到 0。
+- `RelayPublisher` 使用现有 reqwest 向 `<baseUrl>/<topic>` POST 纯文本 envelope，对网络失败、
+  HTTP 429 和 5xx 做有限指数退避。发布任务串行化，失败与本地采集隔离。
+- 成功确认官方 quota 后发布完整 snapshot；需要下游知道的任务状态变化立即发布完整 snapshot。
 
-「连接手机…」打开 460×620 的原生窗口，主页面展示二维码、6 位配对码、由电脑公钥指纹生成的
-`XXXX-XXXX` 安全校验码、同一局域网要求和 5 分钟有效期。该窗口保持单实例：重复点击托盘入口只会恢复并置前当前窗口，不会暗中作废仍显示的凭据；只有点击底部「刷新配对码」才生成新凭据并在同一窗口重绘。底部「配对教学」打开可拖动的轻量教学窗，教学窗有自绘关闭按钮和「我知道了」按钮。配对窗口和教学窗均在工作区内定位，不使用系统默认左上角坐标。
+托盘“连接手机”生成二维码。每次明确重新配对/刷新二维码都会轮换 topic、key 与 device ID，使旧手机
+凭据失效。ntfy 不提供可靠 subscriber presence，因此 Windows 只能显示 relay 已配置，不能把它伪装成
+手机实时在线证明。
 
-「连接与诊断…」打开 480×340 的状态窗，显示 Windows 服务、Android 手机和 Codex 额度源；
-「立即确认」只触发额度上游确认，不把手机在线或任务收包当成额度实时确认。撤销配对会主动关闭已认证同步会话，
-手机随后进入离线状态。
+## Relay pairing v1
 
-安装器完成页默认勾选「完成后启动 Codex额度并打开新手引导」。安装阶段先关闭旧的 CodexQuota.exe、
-写入/修复任务 Hook，再由完成页启动已安装程序并打开二维码引导。Hook 写入完成后，用户仍必须在 ChatGPT
-「设置 → 钩子 → 信任全部钩子」中确认 Hooks；
-这一步不会由 Windows 客户端代替。
+二维码 deep link 为 `codexquota://pair?relay=<base64url-json>`。解码后的严格字段：
 
-## 2.2 已统一的三端文案与视觉决策
+```json
+{
+  "protocolVersion": 1,
+  "type": "relay_pairing",
+  "relayBaseUrl": "https://ntfy.sh",
+  "topic": "<256-bit random base64url>",
+  "key": "<256-bit AES key base64url>",
+  "deviceId": "<128-bit random base64url>"
+}
+```
 
-以下是当前正式版本已落实的统一项；后续改动必须继续保持这些语义：
+base URL 必须是无 userinfo/query/fragment 的 HTTPS origin。topic 不来源于用户名、机器名或项目名。
+Android 扫码后扩展现有 `PairingCredentialStore`，使用独立 Android Keystore AES-GCM key 保存 relay
+凭据，同时清除旧 cursor 与 sequence。旧 6 位 LAN discovery 代码暂停使用，不扩展为公网配对。
 
-- Hook 路径和信任动作：统一采用「ChatGPT → 设置 → 钩子 → 信任全部钩子」；
-- 上游新鲜度短标签：Android、Windows 诊断与手环统一使用「已同步 / 缓存 / 待同步 / 离线」；
-  内部 `current / cached / unavailable` 协议状态不直接进入普通用户界面；
-- 配对引导：Windows 与 Android 统一采用「手机端『Codex额度』App」和「打开 App → 设置 → 连接电脑」；优先使用 App 内置扫码，无法扫码时输入 6 位配对码并核对安全校验码；
-- 圆角和材质：Windows 保持原生轻量窗口与 32px 表面圆角，Android/手环继续按各自平台限制转译，
-  不把 Windows 标题栏或桌面按钮机械复制到手机和手环。
+## Relay protocol v1
 
-## 3. 三个运行组件
+明文 domain payload 先在 Windows 本地序列化：
 
-### Windows 原生端
+```json
+{
+  "protocolVersion": 1,
+  "sequence": 42,
+  "generatedAtMs": 1789516800000,
+  "quota": { "protocolVersion": 3 },
+  "tasks": [],
+  "chatGptState": "running",
+  "chatGptFocused": false
+}
+```
 
-位置：`windows-native/`
+`quota` 复用 quota v3，`tasks` 复用 task v1 的 item/domain 结构，不复制平行模型。然后使用：
 
-- `src/bin/codex_quota_windows.rs`：托盘程序、开机启动、二维码配对窗口、服务生命周期。
-- `src/hook.rs`：读取 Hook 标准输入、限制输入大小、把事件写入本地 spool，并使用
-  `session_index.jsonl` 的 `thread_name` 解析任务标题。原始 prompt 不写入任务同步结果。
-- `src/quota.rs`：从 ChatGPT/Codex 本地 Chromium 缓存中提取白名单额度摘要，并保留可信缓存。
-- `src/host.rs`、`src/network.rs`：配对、TLS 身份、WSS `/pair` 和 `/sync`、心跳和连接管理。
-- `src/storage.rs`：Windows DPAPI 保护的身份和配对数据。
-- `src/foreground.rs`：只依据官方 ChatGPT Windows 应用身份判断是否失焦，不读取窗口标题或会话内容。
+- AES-256-GCM；
+- 每条消息由系统 CSPRNG 生成新的 96-bit nonce；
+- 128-bit authentication tag（附在 ciphertext 中）；
+- AAD = 固定 `CQ-RELAY-V1\0` magic + 32-byte topic identifier。
 
-Windows 只发布额度白名单和 Task Sync v1 摘要，不转发命令、工具参数、文件路径、回复或完整日志。
+ntfy message body 只包含：
 
-### Android 手机端
+```json
+{"version":1,"nonce":"<base64url>","ciphertext":"<base64url ciphertext+tag>"}
+```
 
-位置：`android-app/`
+业务 payload 不进入 ntfy title、tags、priority、filename 或其他明文字段。协议 schema 位于：
 
-#### 当前 UI 布局与交互（0.6.5）
+- `contract/relay-pairing-v1.schema.json`
+- `contract/relay-envelope-v1.schema.json`
+- `contract/relay-payload-v1.schema.json`
 
-- **首页**：顶部显示“Codex额度 / 额度与当前任务”和同步胶囊；离线时先显示离线提示。主卡上部为 5 小时额度圆环，下部为周额度百分比、横向进度条和重置日期；随后是电脑与手环合并状态胶囊、当前任务摘要和紧凑可用重置。圆环数字与百分号同色并作轻微光学校正；缓存/离线显示灰阶。缺少 5 小时窗口时显示 `-- / 暂无数据`，窗口存在但未完成同步时显示 `-- / 待同步`。底部为仅图标的首页、任务、设置导航。
-- **任务页**：按“需要授权 / 处理中 / 等待查看”分组，卡片保持高信息密度。每行左侧彩点表示状态，标题与操作位于同一行，底部显示状态和相对时间；需要授权使用红色状态文字，其他状态默认灰色。页面提示明确说明隐藏只影响手机和手环看板。
-- **设置页**：保留“连接与设备、提醒、显示与数据”分组，并增加“关于”。“连接电脑”进入独立页面，可选择内置扫码或输入配对码；提醒按通知时机、手机通知、手环通知、系统通知设置排列，需要授权/等待查看的分类调整交给 Android 系统；显示与数据包含本机隐藏任务标题和诊断日志导出；“关于”显示当前版本并提供检查更新。更新检查每天前台静默执行至多一次，手动检查不受此限制；只接受本项目公开 GitHub Releases 的稳定语义版本，失败不影响同步，也不自动下载或安装。
-- **同步与状态**：WSS 在线本身不等于额度刚刚确认。Windows 每 45 秒主动确认一次官方额度；新连接协商和手机刷新请求仍可额外触发确认，但手机后台任务不再是维持实时性的唯一来源。Android 每 5 秒重新评估年龄，最近确认在两分钟内显示“已同步”，超过两分钟转为“缓存”，离线显示“离线”。该机制依赖 Windows 托盘进程存活，不承诺 Windows 退出后仍持续确认。
+## Android relay subscriber
 
-#### 任务移除语义
+`RelayWebSocketClient` 使用 OkHttp 订阅 `wss://<relay>/<topic>/ws`：
 
-任务页的“隐藏/删除”操作都先弹出二次确认。确认后只在 Android 本机按会话 ID 隐藏任务，同时从手机与手环摘要中移除；不会删除 ChatGPT 对话或修改 Windows Hook 数据。该会话出现新的活动快照后，任务允许重新出现在看板中。
+1. 没有可靠 cursor 时使用 `since=latest`，只恢复最新缓存 state；
+2. 正常重连使用最后接受的 ntfy message ID 作为 `since` cursor；
+3. `open`、`keepalive` 和其他非 `message` event 不进入 domain；
+4. `message` 先严格解析 envelope，再用 topic-bound AAD 做 AES-GCM 认证解密；
+5. 解密后严格解析 relay payload，持久化拒绝 `sequence <= lastAcceptedSequence`；
+6. 接受后把 quota/task 送入现有 `RuntimeStateRepository` 和 `TaskAlertCoordinator`。
 
-#### 配对、手环与通知行为
+认证失败、未知字段、错误 topic、重复或倒退 sequence 都静默丢弃；实现不记录 key、ciphertext 或
+plaintext。网络切换/断线进入有限退避重连。Android“刷新”只重连、恢复缓存并重新计算 freshness，
+不发送 Android → Windows command。
 
-- **二维码配对**：手机使用 CameraX 与随 APK 打包的 ML Kit 模型在 App 内识别二维码，仅接受 `codexquota://pair` 链接；读取后校验有效期、TLS 身份和局域网端点，成功后保存本机配对凭据并启动 WSS 同步。相机权限只在用户选择扫码时请求，拒绝后仍可使用手动配对。
-- **手动配对**：Windows 在配对窗口有效期内通过固定 UDP 端口广播不含秘密的候选公告；Android 输入 6 位配对码时自动收集同一局域网候选，用户核对两端 `XXXX-XXXX` 安全校验码一致后才提交配对码。公告过期、来源不是私网或字段超出封闭协议时直接忽略。
-- **手环连接检查**：应用启动时初始化 `XiaomiWearableBridge`；显式检查会刷新 Wearable 状态、请求所需权限并再次刷新。连接中断或节点变化后会清除旧监听状态并重新注册消息监听和连接订阅，只有两者成功后才显示手环已连接。日常手环连接由小米运动健康维护，Android 不接管主连接；设置页当前不展示独立设备检查卡片。
-- **通知**：通知时机可选“从不 / 失焦 / 始终”，手机与手环开关独立；需要授权和等待查看的分类调整交给 Android 系统通知设置。处理中默认静默；需要授权和等待查看的手机渠道默认请求振动、不播放声音，但部分系统仍可能保持振动或悬浮通知关闭。手机 App 自身前后台不参与通知决策；“失焦”只判断 ChatGPT Windows 客户端。手机通知还受 Android 13+ `POST_NOTIFICATIONS` 系统权限约束，应用只发起一次请求并提供系统通知设置入口，不能强制开启。没有前台服务，系统杀死进程后不保证通知必达。
+## Xiaomi XMS 集成
 
-- `CodexQuotaApplication`：创建通知渠道、运行时仓库、WSS 客户端和小米桥接。
-- `runtime/PairingClient`：处理 `codexquota://pair` 深链和一次性配对。
-- `runtime/SyncWebSocketClient` / `SyncStreamSession`：固定电脑公钥、连接 `/sync`、重连、序列号和快照去重；
-  新连接协商完成后立即发送一次已认证的额度刷新请求，并每 5 秒复核上游确认的年龄；Windows 自身负责 45 秒的持续确认节拍。
-- `runtime/RuntimeStateRepository`：保存最近可信额度、重置数据、任务快照、连接状态和本机隐藏任务。
-- `notifications/TaskAlertCoordinator`：把任务状态变化、ChatGPT 失焦、重连、通知时机和手机/手环渠道设置合并成投递决策。
-- `notifications/TaskNotificationDispatcher`：发 Android 系统通知。
-- `runtime/XiaomiWearableBridge`：通过官方 `xms-wearable-lib_1.4_release.aar` 与匹配签名的 RPK 通信。
-- `ui/`：首页、任务、设置三页 Compose 看板。任务移除只影响本机和手环摘要，确认后才隐藏。
+`third_party/xms_wearable_sdk_cleanroom/` vendored upstream commit
+`6483f939785e9c1dd011465d573931f669a6adab`，保留 MIT `LICENSE` 和 `UPSTREAM.md`。
 
-Android 端不使用 WebView、Flutter 或 React Native，不使用常驻前台服务。用户可在系统设置中开启自启动、应用加锁和电池无限制，以提高后台存活概率。
+Android Gradle 直接把其 `xms-wearable-lib` 作为源码 module 构建，不访问未经确认长期可用的 Maven
+仓库，也不需要 `app/libs/xms-wearable-lib_1.4_release.aar`。现有
+`com.xiaomi.xms.wearable.*` 调用保持不变；`XiaomiWearableBackend.initializer` 必须先执行
+`WearableBackendConfig.setBackend(..., WearableBackend.XIAOMI)`，随后才创建 Node/Auth/Message/
+Notify API。
 
-### 小米手环端
+应用 package identity 为 `io.github.rogerlang.codexquota`；Kotlin namespace 暂保留
+`com.codex.quota.android`。Vela manifest 使用同一 identity。签名、真实权限和 Band 9 Pro 通信尚需
+真机验证。
 
-位置：`band-app/`
+## 状态与隐私语义
 
-- `src/pages/index/index.ux`：手环页面布局和触控/滚动。
-- `src/common/quota-state.cjs`：额度状态和颜色语义。
-- `src/common/task-state.cjs`：任务状态排序和摘要。
-- `src/manifest.json`：包名、版本和签名关联。
+- `PreToolUse` / `UserPromptSubmit` → 处理中（静默）。
+- `PermissionRequest` → 需要授权（按设置提醒）。
+- `Stop` → 等待查看（按设置提醒，不表示完成）。
+- 断线继续保留最近可信 quota/task，并依据原有 freshness 显示缓存/过期，不猜测新值。
+- 不进入 relay：prompt、response、tool args、terminal output、文件路径、Cookie、令牌、账号资料或完整日志。
 
-当前页面结构（小米手环 10，`212×520`、DPR 2.0）：
+## Legacy 边界
 
-- 根节点是一个 `div`，内部使用 Vela 原生纵向 `swiper`，`loop=false`、`enableswipe=true`，包含两张同高页面；
-  这是上下滑动切页，不是横向分页，也不是自由长列表。没有自定义 touchend、强制 index 或动画时长，翻页惯性和
-  系统边缘侧滑返回交给 Vela/系统处理。
-- 两页都在顶部弧形安全区外沿显示系统时间；同步胶囊位于时间下方。第一页上部以大数字显示“5小时额度”和重置时间，
-  中部以百分比与原生横向进度条显示“周额度”，底部紧凑显示“可用重置”次数与到期日；第二页只保留任务摘要，不再增加“任务”标题。
-- 页面右侧使用 Vela 原生两个小圆点作为页指示器；任务时间区域主动左收，避免与页指示器重叠。页面不使用圆环、
-  卡片、模糊、复杂阴影或横向滚动。
-- 当前正式 UI 的主要几何：同步胶囊 `left=48px,width=116px,height=36px`；5 小时额度区 `top=110px`，主数字
-  `96px`（三位数紧凑档 `80px`），第一分割线 `top=280px`，周额度区 `top=297px`，第二分割线 `top=387px`，重置区 `top=405px`；任务区 `top=115px`，每项
-  `86px`，状态点 `7px`，状态/时间行宽 `140px`。
-
-任务和额度语义：
-
-- 任务最多展示 3 条，输入标题最多 16 个 Unicode 字符，标题最多两行并省略；排序固定为“需要授权 → 处理中 →
-  等待查看”。状态点分别为红 `#ff7e7e`、蓝 `#59aaf2`、绿 `#67ce91`，文字仍明确写出状态，不依赖颜色单独传达。
-- 5 小时额度和周额度分别按自身百分比使用红/黄/绿语义，数字与百分号保持同色；可用重置颜色独立，大于零为绿色、零次为红色，到期只显示月日。
-- 同步新鲜度：最近一次官方确认在两分钟内显示“已同步”，不附具体时间；超过两分钟显示“缓存 + 相对分钟”。手环缓存年龄使用同一确认时间，不使用旧缓存到达手环的时间。离线、暂停、
-  上游缓存或数据异常仍使用各自状态，不将任务活动或局域网在线冒充额度实时性。
-- 手环只接收 Android 裁剪后的额度和任务摘要；不接收令牌、Cookie、卡片 ID、标题描述、原始响应、提示词或日志。
-  手环通知亮屏/震动仍由 Android Wearable Bridge、小米运动健康与系统设置共同决定。
-
-## 4. 协议与信任边界
-
-协议契约位于 `contract/`：
-
-- `pairing-offer-v1.schema.json`：二维码中的一次性配对载荷和电脑公钥指纹。
-- `pairing-discovery-v1.schema.json`：手动配对的无秘密局域网候选公告，只含电脑指纹、私网端点和过期时间。
-- `pairing-session-v1.schema.json`：配对请求/响应。
-- `sync-stream-v1.schema.json`：WSS 会话、心跳、快照和序列号。
-- `snapshot-v1.schema.json` / `snapshot-v2.schema.json` / `snapshot-v3.schema.json`：Windows → Android
-  的额度快照版本契约；v3 新鲜度不包含凭证、原始响应或错误详情。
-- `wearable-quota-v2.schema.json`：Android → 手环的独立脱敏额度摘要；重置卡不含 `id/title/description`。
-- `task-sync-v1.schema.json`：任务状态、短标题、会话标识和生成时间。
-
-配对和同步规则：
-
-1. 二维码不携带长期手机令牌，只携带短时一次性码、候选私网地址和电脑公钥指纹；手动发现公告连一次性码也不携带。
-2. 日常同步使用 TLS 1.3 WebSocket；Android 通过公钥固定验证已配对电脑，不能因为 IP 变化或普通自签名证书就信任新主机。
-3. Android 和 Windows 都拒绝未知字段、非法时间、跨连接倒序序列和过大的输入。
-4. 配对凭据存储在 Android Keystore 加密区域；Windows 私钥使用 DPAPI 保护。撤销配对后旧凭据立即失效。
-5. 默认网络边界是可信局域网，不提供公网中继和后台遥测。
-6. Android 下拉刷新通过当前已认证 WSS 发送 `refresh_request(scope=quota)`；请求必须匹配当前
-   connection ID。Windows 使用 10 秒全局冷却后查询上游，返回的新鲜度仍不包含错误详情或凭证。
-
-更细的安全理由见 `docs/security.md` 和 `docs/adr-003-encrypted-lan-pairing.md`、`docs/adr-004-tls-sync-stream.md`。
-
-## 5. 任务状态和通知语义
-
-### 状态来源
-
-| Hook 事件 | 手机/手环显示 | 默认行为 |
-| --- | --- | --- |
-| `UserPromptSubmit`、`PreToolUse` | `处理中` | 只更新面板，不提醒 |
-| `PermissionRequest` | `需要授权` | 按通知时机、类型和渠道开关提醒 |
-| `Stop` | `等待查看` | 按通知时机、类型和渠道开关提醒 |
-
-`等待查看` 只表示本轮 Hook 已停止，不推断“已完成”；当前 Hook 也不声明普通等待输入或受阻状态。
-
-### 通知决策顺序
-
-`TaskAlertCoordinator` 对每个会话只处理状态变化：
-
-1. 相同状态重复事件去重；
-2. 冷启动不回放历史等待查看；重连时只对仍存在的需要授权任务按规则提醒；
-3. “失焦”模式仅在 ChatGPT Windows 客户端失焦时提醒，“始终”模式不受 ChatGPT 焦点影响；Android 看板自身前后台不额外抑制；
-4. 手机通知和手环通知独立开关；关闭渠道不会停止数据同步；
-5. Android 系统通知权限、悬浮通知和锁屏显示最终由系统和用户决定，应用不能强制开启。
-
-默认设置是“仅在 ChatGPT 失焦时”，等待查看和需要授权均开启，手机和手环渠道均开启。处理中永远不提醒。
-
-## 6. 数据生命周期
-
-- Windows 保留额度和任务的最小本地摘要，以支持重连和可信缓存。
-- Android 运行时仓库保留最近可信额度、重置数据和最新任务板；WSS 最近收包时间只用于传输刷新，
-  不作为额度新鲜度。v3 的额度显示只依据上游 `lastSuccessAt` 和状态；Android 会每 5 秒复核，
-  上游成功确认超过两分钟即使服务仍连通也显示“缓存”。断线显示“离线”，上游失败显示
-  “缓存”或“待确认”，不把局域网在线、任务更新或进程存活伪装成实时额度。
-- 任务移除记录存储在 Android 本地，按会话 ID 和状态/更新时间隐藏；同一任务有新活动时自动恢复。
-- 手环只收到当前过滤后的额度和最多 3 条任务摘要，不接收配对令牌。
-- 手环额度摘要使用 Android 侧独立版本 2；重置卡不含 v1 的 `id`、`title` 或 `description`。`0.6.5`
-  保持已验收的手环本地布局和新鲜度呈现，不扩展 Android/Windows 协议；任何协议字段或摘要版本变更仍需单独确认。
-- 诊断导出必须由用户主动触发，只包含版本、连接阶段、错误代码、重连次数、传输时间、脱敏的上游
-  新鲜度和链路状态。
-
-## 7. 兼容与遗留代码
-
-`src/`、`astrobox-plugin/` 和部分 ADR/验收记录包含 0.4.0 以前的 Electron/AstroBox 架构。它们用于历史回溯，不是当前 0.6.5 主构建、日常链路或发布产物。除非用户明确要求维护旧版，不要把旧端口、旧 Bearer 协议或 AstroBox 日常桥接重新接入新实现。
-
-## 8. 变更原则
-
-- 协议、隐私边界、通知语义和日常连接方式属于高风险变更，先补 ADR/测试并让用户确认。
-- 手环 UI 先生成预览，确认后再修改 RPK 源码。
-- 版本发布前保持 Windows、APK、RPK 三端版本一致；发布流程见 `docs/development-guide.md`。
+LAN WSS、UDP discovery、TLS pinning、旧 pairing schema 和相关测试暂留以便回滚与对照，但正式
+入口和 Android Application 不实例化它们。后续删除 legacy 代码需单独任务，不在 Foundation 01 扩展范围。

@@ -152,3 +152,66 @@ test("manual pairing discovery contains identity but no pairing secret", async (
   assert.equal(validate({ ...discovery, code: "123456" }), false);
   assert.equal(validate({ ...discovery, token: "private" }), false);
 });
+
+test("relay v1 schemas keep pairing, envelope, and decrypted snapshot closed", async () => {
+  const load = async (name) =>
+    JSON.parse(await readFile(new URL(`../contract/${name}`, import.meta.url), "utf8"));
+  const snapshotV1 = await load("snapshot-v1.schema.json");
+  const snapshotV2 = await load("snapshot-v2.schema.json");
+  const snapshotV3 = await load("snapshot-v3.schema.json");
+  const pairing = await load("relay-pairing-v1.schema.json");
+  const envelope = await load("relay-envelope-v1.schema.json");
+  const payload = await load("relay-payload-v1.schema.json");
+  const ajv = new Ajv({ allErrors: true });
+  addFormats(ajv);
+  for (const schema of [snapshotV1, snapshotV2, snapshotV3]) ajv.addSchema(schema);
+
+  const validatePairing = ajv.compile(pairing);
+  const pairingValue = {
+    protocolVersion: 1,
+    type: "relay_pairing",
+    relayBaseUrl: "https://ntfy.sh",
+    topic: "A".repeat(43),
+    key: "B".repeat(43),
+    deviceId: "C".repeat(22),
+  };
+  assert.equal(validatePairing(pairingValue), true, JSON.stringify(validatePairing.errors));
+  assert.equal(validatePairing({ ...pairingValue, computerName: "private" }), false);
+
+  const validateEnvelope = ajv.compile(envelope);
+  assert.equal(
+    validateEnvelope({ version: 1, nonce: "A".repeat(16), ciphertext: "ciphertext" }),
+    true,
+    JSON.stringify(validateEnvelope.errors),
+  );
+  assert.equal(
+    validateEnvelope({ version: 1, nonce: "A".repeat(16), ciphertext: "ciphertext", quota: 50 }),
+    false,
+  );
+
+  const validatePayload = ajv.compile(payload);
+  const quota = {
+    protocolVersion: 3,
+    generatedAt: "2026-09-16T00:00:00Z",
+    sourceStatus: "ok",
+    limitsCollectedAt: "2026-09-16T00:00:00Z",
+    windows: [],
+    resetInventory: { status: "missing", availableCount: null, cachedAt: null, items: [] },
+    link: { computer: "online", codex: "ok" },
+    upstreamFreshness: {
+      usage: { status: "current", lastAttemptAt: null, lastSuccessAt: null },
+      resetInventory: { status: "unavailable", lastAttemptAt: null, lastSuccessAt: null },
+    },
+  };
+  const payloadValue = {
+    protocolVersion: 1,
+    sequence: 1,
+    generatedAtMs: 1_789_516_800_000,
+    quota,
+    tasks: [],
+    chatGptState: "running",
+    chatGptFocused: false,
+  };
+  assert.equal(validatePayload(payloadValue), true, JSON.stringify(validatePayload.errors));
+  assert.equal(validatePayload({ ...payloadValue, prompt: "private" }), false);
+});

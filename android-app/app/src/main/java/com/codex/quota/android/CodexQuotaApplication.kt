@@ -5,15 +5,13 @@ import android.net.Uri
 import com.codex.quota.android.notifications.NotificationChannels
 import com.codex.quota.android.notifications.TaskAlertCoordinator
 import com.codex.quota.android.notifications.TaskNotificationDispatcher
-import com.codex.quota.android.protocol.PairingDeepLinkContract
 import com.codex.quota.android.protocol.PairingOffer
-import com.codex.quota.android.runtime.PairingClient
+import com.codex.quota.android.protocol.RelayPairingDeepLinkContract
 import com.codex.quota.android.runtime.BandConnectionCheckResult
 import com.codex.quota.android.runtime.RuntimeStateRepository
 import com.codex.quota.android.runtime.SharedPreferencesTaskVisibilityStore
-import com.codex.quota.android.runtime.SyncWebSocketClient
+import com.codex.quota.android.runtime.RelayWebSocketClient
 import com.codex.quota.android.runtime.XiaomiWearableBridge
-import com.codex.quota.android.security.ConnectionIdentityStore
 import com.codex.quota.android.security.PairingCredentialStore
 import com.codex.quota.android.ui.NotificationSettings
 import com.codex.quota.android.ui.NotificationSettingsStore
@@ -23,20 +21,20 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class CodexQuotaApplication : Application() {
-  val runtimeRepository by lazy { RuntimeStateRepository(taskVisibility = SharedPreferencesTaskVisibilityStore(this)) }
+  val runtimeRepository by lazy {
+    RuntimeStateRepository(taskVisibility = SharedPreferencesTaskVisibilityStore(this), relayMode = true)
+  }
   private lateinit var wearableBridge: XiaomiWearableBridge
 
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private lateinit var credentialStore: PairingCredentialStore
-  private lateinit var connectionStore: ConnectionIdentityStore
-  private lateinit var syncClient: SyncWebSocketClient
+  private lateinit var syncClient: RelayWebSocketClient
   private lateinit var taskAlerts: TaskAlertCoordinator
 
   override fun onCreate() {
     super.onCreate()
     NotificationChannels.create(this)
     credentialStore = PairingCredentialStore(this)
-    connectionStore = ConnectionIdentityStore(this)
     wearableBridge = XiaomiWearableBridge(this, runtimeRepository)
     val phoneDispatcher = TaskNotificationDispatcher(this)
     taskAlerts =
@@ -45,7 +43,7 @@ class CodexQuotaApplication : Application() {
         bandDispatcher = { wearableBridge.sendTaskAlert(it) },
       )
     taskAlerts.updateSettings(NotificationSettingsStore(this).load())
-    syncClient = SyncWebSocketClient(applicationScope, runtimeRepository, taskAlerts)
+    syncClient = RelayWebSocketClient(applicationScope, runtimeRepository, credentialStore, taskAlerts)
     wearableBridge.start()
     startSavedConnection()
   }
@@ -59,32 +57,24 @@ class CodexQuotaApplication : Application() {
   }
 
   fun handlePairingLink(uri: Uri) {
-    runCatching { PairingDeepLinkContract.decode(uri) }
-      .onSuccess(::handlePairingOffer)
+    runCatching { RelayPairingDeepLinkContract.decode(uri) }
+      .onSuccess { credentials ->
+        credentialStore.saveRelay(credentials)
+        syncClient.start(credentials)
+      }
       .onFailure { runtimeRepository.markTransportDisconnected() }
   }
 
+  /** The 6-digit LAN flow is retained only as legacy code and is not a public relay protocol. */
   fun handlePairingOffer(offer: PairingOffer) {
-    applicationScope.launch {
-      runCatching {
-          val result = PairingClient().pair(offer, connectionStore.clientInstanceId())
-          credentialStore.save(result.credentials)
-          connectionStore.saveSyncEndpoint(result.syncEndpoint)
-          syncClient.start(
-            result.syncEndpoint,
-            result.credentials,
-            connectionStore.clientInstanceId(),
-          )
-        }
-        .onFailure { runtimeRepository.markTransportDisconnected() }
-    }
+    @Suppress("UNUSED_VARIABLE") val legacyOffer = offer
+    runtimeRepository.markTransportDisconnected()
   }
 
   fun refreshSync(): Boolean = syncClient.refresh()
 
   private fun startSavedConnection() {
-    val credentials = credentialStore.load() ?: return
-    val endpoint = connectionStore.loadSyncEndpoint() ?: return
-    syncClient.start(endpoint, credentials, connectionStore.clientInstanceId())
+    val credentials = credentialStore.loadRelay() ?: return
+    syncClient.start(credentials)
   }
 }

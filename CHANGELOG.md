@@ -10,6 +10,13 @@ This file records user-visible changes in each public version. Release dates fol
 
 ## [0.6.5] - 未发布
 
+### Foundation / 基础架构
+
+- Fork 目标设备改为 Xiaomi Smart Band 9 Pro（目标设备 / 适配中）；上游 Band 10 验收只保留为历史事实。
+- Android 移除 proprietary XMS AAR，源码集成 MIT CleanRoom SDK pinned commit `6483f939785e9c1dd011465d573931f669a6adab`，并强制 Xiaomi backend。
+- Windows → Android 正式链路由 LAN WSS/UDP discovery 迁移为公共 ntfy relay 上的 AES-256-GCM 端到端加密 snapshot。
+- Android application ID 与 Vela package identity 迁移为 `io.github.rogerlang.codexquota`；Kotlin namespace 暂保持不变。
+
 ### 修复 / Fixed
 
 - 手环页面退出或重开时停止旧定时器、请求和异步回调，避免旧页面回调触发偶发启动崩溃。
@@ -22,7 +29,7 @@ This file records user-visible changes in each public version. Release dates fol
 
 ### 状态 / Status
 
-- 本地候选版本，尚未提交、推送或发布 GitHub Release。
+- Foundation 01 已获用户验收；`0.6.5` 仍是未发布候选，尚无 GitHub Release。
 
 ## [0.6.4] - 2026-08-13
 
