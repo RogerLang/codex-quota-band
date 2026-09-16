@@ -1,0 +1,149 @@
+<template>
+  <div class="page">
+    <text class="title">CodexQuota</text>
+    <text class="subtitle">Stage 02D Probe</text>
+    <div class="status-row"><text class="label">手机连接</text><text class="value">{{connectionText}}</text></div>
+    <div class="status-row second"><text class="label">互联诊断</text><text class="value">{{diagnosisText}}</text></div>
+    <div class="status-row third"><text class="label">手环→手机</text><text class="value">{{messageText}}</text></div>
+    <div class="action" onclick="testBandToPhone"><text class="action-label">测试手环→手机</text></div>
+    <text class="hint">{{hintText}}</text>
+  </div>
+</template>
+
+<script>
+import interconnect from '@system.interconnect'
+import protocol from '../../common/stage02-protocol.cjs'
+import diagnosis from '../../common/stage02-diagnosis.cjs'
+
+const connection = interconnect.instance()
+const TIMEOUT_MS = 8000
+
+function randomNonce() {
+  let value = ''
+  while (value.length < 32) value += ('00000000' + Math.floor(Math.random() * 0x100000000).toString(16)).slice(-8)
+  return value.slice(0, 32)
+}
+
+function parseEvent(event) {
+  const raw = event && event.data !== undefined ? event.data : event
+  return protocol.parse(raw)
+}
+
+export default {
+  private: {
+    connectionText: '--', diagnosisText: '--', messageText: '--', hintText: '等待测试...',
+    connected: false, destroyed: false, bandNonce: '', timer: null, diagnosisTimer: null
+  },
+  onInit() {
+    connection.onopen = () => { if (!this.destroyed) { this.connected = true; this.connectionText = 'PASS'; this.hintText = '等待手机测试...' } }
+    connection.onclose = () => { if (!this.destroyed) this.disconnected() }
+    connection.onerror = () => { if (!this.destroyed) this.disconnected() }
+    connection.onmessage = (event) => this.handleMessage(parseEvent(event))
+  },
+  onShow() {
+    this.clearDiagnosisTimer()
+    this.diagnosisText = '检查中'
+    this.diagnosisTimer = setTimeout(() => { if (!this.destroyed && this.diagnosisText === '检查中') this.diagnosisText = 'TIMEOUT' }, 9000)
+    try {
+      connection.diagnosis({
+        timeout: 8000,
+        success: (result) => {
+          if (this.destroyed) return
+          this.clearDiagnosisTimer()
+          this.diagnosisText = diagnosis.diagnosisStatus(result && result.status)
+        },
+        fail: () => {
+          if (this.destroyed) return
+          this.clearDiagnosisTimer()
+          this.diagnosisText = 'OTHER'
+        }
+      })
+    } catch (_) {
+      this.clearDiagnosisTimer()
+      this.diagnosisText = 'OTHER'
+    }
+    connection.getReadyState({
+      success: (result) => {
+        if (this.destroyed) return
+        this.connected = result.status === 1
+        this.connectionText = this.connected ? 'PASS' : '--'
+        this.hintText = this.connected ? '等待手机测试...' : '等待手机连接...'
+      },
+      fail: () => { if (!this.destroyed) this.disconnected() }
+    })
+  },
+  onDestroy() {
+    this.destroyed = true
+    this.clearTimer()
+    this.clearDiagnosisTimer()
+    connection.onopen = null
+    connection.onclose = null
+    connection.onerror = null
+    connection.onmessage = null
+  },
+  disconnected() {
+    this.connected = false
+    this.connectionText = 'FAIL'
+    this.messageText = '--'
+    this.bandNonce = ''
+    this.clearTimer()
+    this.hintText = '手机链路断开'
+  },
+  clearTimer() { if (this.timer) clearTimeout(this.timer); this.timer = null },
+  clearDiagnosisTimer() { if (this.diagnosisTimer) clearTimeout(this.diagnosisTimer); this.diagnosisTimer = null },
+  failed(code) {
+    this.clearTimer()
+    this.bandNonce = ''
+    this.messageText = 'FAIL'
+    this.hintText = code
+  },
+  handleMessage(message) {
+    if (this.destroyed || !this.connected || !message) return
+    if (message.type === 'stage02_ping') {
+      connection.send({
+        data: protocol.create('stage02_pong', message.nonce),
+        success: () => { if (!this.destroyed) this.hintText = '手机消息已回复' },
+        fail: () => { if (!this.destroyed) this.hintText = '回复失败' }
+      })
+      return
+    }
+    if (message.type !== 'stage02_android_pong') return
+    if (!this.bandNonce || message.nonce !== this.bandNonce) { this.failed('NONCE_MISMATCH'); return }
+    const nonce = this.bandNonce
+    this.clearTimer()
+    this.bandNonce = ''
+    this.messageText = 'PASS'
+    this.hintText = '手机已回复'
+    connection.send({
+      data: protocol.create('stage02_pong', nonce)
+    })
+  },
+  testBandToPhone() {
+    if (this.destroyed || !this.connected) { this.hintText = '等待手机连接'; return }
+    this.clearTimer()
+    const nonce = randomNonce()
+    this.bandNonce = nonce
+    this.messageText = '检查中'
+    this.hintText = '等待手机回复...'
+    this.timer = setTimeout(() => { if (this.bandNonce === nonce) this.failed('MESSAGE_TIMEOUT') }, TIMEOUT_MS)
+    connection.send({
+      data: protocol.create('stage02_band_ping', nonce),
+      fail: () => { if (this.bandNonce === nonce) this.failed('BAND_SEND_FAILED') }
+    })
+  }
+}
+</script>
+
+<style>
+.page { width:336px;height:480px;background-color:#10171b;position:relative; }
+.title { position:absolute;top:35px;left:30px;width:276px;height:38px;color:#f2f6f7;font-size:28px;font-weight:bold;text-align:center; }
+.subtitle { position:absolute;top:78px;left:30px;width:276px;height:30px;color:#b3c0c5;font-size:20px;text-align:center; }
+.status-row { position:absolute;top:132px;left:30px;width:276px;height:43px;flex-direction:row;justify-content:space-between;align-items:center;border-bottom-width:1px;border-bottom-style:solid;border-color:#3b4a50; }
+.second { top:191px; }
+.third { top:250px; }
+.label { width:105px;height:32px;color:#f2f6f7;font-size:20px; }
+.value { width:169px;height:32px;color:#72d6a6;font-size:16px;font-weight:bold;text-align:right; }
+.action { position:absolute;top:330px;left:30px;width:276px;height:54px;background-color:#285c70;border-radius:18px;justify-content:center;align-items:center; }
+.action-label { width:260px;height:32px;color:#f2f6f7;font-size:21px;text-align:center; }
+.hint { position:absolute;top:411px;left:30px;width:276px;height:38px;color:#b3c0c5;font-size:18px;text-align:center; }
+</style>

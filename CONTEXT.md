@@ -2,6 +2,16 @@
 
 本项目让用户在不牺牲小米手环日常健康与通知能力的前提下，在手环上查看 Codex 额度并接收任务状态提醒。
 
+## Band 9 Pro 表盘方向（2026-09-16 已确认）
+
+Band 9 Pro 的最终主界面是真正的手环表盘：抬腕第一眼看见 weekly quota，不要求先打开 RPK。
+第一版表盘暂不显示 5 小时额度，时间居中，支持多个运行中任务计数；RPK 负责数据桥和备用详情页。
+完整信息、状态优先级、色彩与待定边界见 [Band 9 Pro 表盘设计决策](docs/band_9_pro_watchface_design.md)。
+本文后续关于 5 小时额度为手环主视觉、212×520 双页 RPK 和旧任务状态颜色的描述，属于上游
+Band 10 / 旧手机界面取舍；**不适用于 Band 9 Pro 正式表盘**。手机界面现状不因本次表盘决定而改变。
+本次仅记录决策，不开始 Lua 表盘、Vela → Lua IPC 或 AOD 实现；正式 UI 源码仍须先经 336×480
+预览确认。
+
 ## Fork Foundation 01 最新决策（2026-09-16）
 
 本节覆盖本文后续仍残留的上游旧架构描述：目标设备改为 Xiaomi Smart Band 9 Pro（目标设备 / 适配中）；
@@ -18,6 +28,7 @@ commit 的 CleanRoom XMS SDK 并强制 Xiaomi backend。正式 runtime 不启动
 - `docs/architecture.md`：当前 `0.6.5` 代码的组件、协议、数据流和状态语义。
 - `docs/development-guide.md`：构建、测试、真机验收和发布流程入口。
 - `docs/build-verification.md`：当前正式发布包或候选的构建、测试与产物校验摘要；`docs/device-acceptance.md`：公开的真机验收结论。
+- `docs/band_9_pro_watchface_design.md`：Band 9 Pro 真表盘已确认的产品方向与尚待预览确认的实现边界。
 
 如果不同文档出现冲突，先以用户最新明确决策为准；在产品语义不明确时暂停实现并询问，不从旧架构或外部模板推断新需求。
 

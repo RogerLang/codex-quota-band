@@ -2,6 +2,22 @@
 
 本文件只保留正式发布包和当前待验收候选的验证结论与校验值。逐次开发、调试和设备环境记录不随公开仓库保留。
 
+## Stage 02D 独立通信探针（2026-09-16）
+
+以下本地产物仅用于 Band 9 Pro 的 validation-only 通信测试，不是 `0.6.5` 正式产品包：
+
+| 产物 | 本地文件 | 大小 | SHA-256 |
+| --- | --- | ---: | --- |
+| Validation APK | `out/stage02/CodexQuota-Stage02D-notify-feedback-validation.apk` | 46,405,156 bytes | `92846A648322756AA03DDA5B90E462F5D252249E1DECF808B88A40210A72E984` |
+| Probe RPK | `out/stage02/CodexQuota-Stage02D-watch-feedback-probe.rpk` | 38,600 bytes | `7696C5A61DEB9C3E90766E476F70C6849C7DEA3872476646CB79331D742E818D` |
+
+两者 identity 为 `io.github.rogerlang.codexquota.validation`，公开签名证书 SHA-256 均为
+`fd6239d22597887c5e64c669ecbcb93fe1127d9a8718fe0e7de179be4d2760e9`，即 **MATCH**。
+真机通信结果为 `PASS_WITH_NOTIFY_API_WARNING`：通知已到达并振动，validation 的回执等待超时。
+正式 identity、额度/任务链路和真表盘尚未验收；APK/RPK 与私钥均不纳入 Git。
+本次固化回归：Android debug JVM **129/129**、validation JVM **142/142**，两变体 Lint 与 APK
+构建通过；Probe 源码测试 **5/5**、RPK 构建与成品测试 **1/1** 通过；根目录 Node 测试 **47/47** 通过。
+
 ## 0.6.5 本地候选（未发布）
 
 三端产品版本统一为 `0.6.5`；安卓手机和手环内部安装序号均为 `607`。三端显示名称统一为「Codex额度」，交付文件名统一使用 `CodexQuota`。
@@ -12,7 +28,8 @@
 | 安卓手机 | 单元测试、Lint、Release 构建与包内版本检查 | `CodexQuota-0.6.5.apk`（24,614,921 bytes） | `6022A5E5191813F1E6F20F12E99D044DEC3C37105920544126FBEC57CE542BCA` | 已保留数据覆盖安装，系统报告 `0.6.5` / `607` |
 | 小米手环 10 | RPK Release 构建，36/36 | `CodexQuota-0.6.5.rpk`（50,240 bytes） | `3C7938D5235082FCDF82BCB7122ABCBA1F5A7C2C7597DA53095002A1725BE2A6` | 已复制到手机 `Download`，等待用户安装 |
 
-0.6.5 尚未完成三端真机验收，也未提交、推送或创建 GitHub Release。
+0.6.5 尚未完成三端正式产品真机验收，也未创建 GitHub Release；Foundation 与 Stage 02D
+通信探针的阶段源码已分别固化，不能据此把本地候选描述为已发布版本。
 
 ## 0.6.4 正式发布包
 

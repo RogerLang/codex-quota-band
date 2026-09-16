@@ -17,6 +17,12 @@ This file records user-visible changes in each public version. Release dates fol
 - Windows → Android 正式链路由 LAN WSS/UDP discovery 迁移为公共 ntfy relay 上的 AES-256-GCM 端到端加密 snapshot。
 - Android application ID 与 Vela package identity 迁移为 `io.github.rogerlang.codexquota`；Kotlin namespace 暂保持不变。
 
+### Stage 02D / Band 9 Pro 通信验证
+
+- 独立 validation APK 与 Band 9 Pro Probe RPK 在真机验证 XMS service、node、权限、安装查询和双向消息。
+- 用户确认测试通知到达并振动；validation 的 `NotifyApi` Task 等待 8 秒超时，阶段结果为 `PASS_WITH_NOTIFY_API_WARNING`，回执时序保留为观察项。
+- 上述结论只覆盖通信探针；正式包、额度/任务链路、后台场景和表盘尚未验收。
+
 ### 修复 / Fixed
 
 - 手环页面退出或重开时停止旧定时器、请求和异步回调，避免旧页面回调触发偶发启动崩溃。
@@ -30,6 +36,7 @@ This file records user-visible changes in each public version. Release dates fol
 ### 状态 / Status
 
 - Foundation 01 已获用户验收；`0.6.5` 仍是未发布候选，尚无 GitHub Release。
+- 已确认 Band 9 Pro 最终主界面采用真表盘，首版以 weekly quota 为核心；设计约束见 `docs/band_9_pro_watchface_design.md`，本阶段未实现。
 
 ## [0.6.4] - 2026-08-13
 

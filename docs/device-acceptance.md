@@ -2,6 +2,13 @@
 
 本文件是公开的验收结论，不记录个人设备编号、局域网信息、临时路径或逐次试装过程。
 
+## Band 9 Pro Stage 02D 通信探针（2026-09-16）
+
+- 用户在真机确认：小米运动健康已连接 Band 9 Pro，独立 Probe RPK 可打开；XMS service、目标 node、授权前后 RPK 安装查询、`DEVICE_MANAGER` 与 `NOTIFY` 权限、Vela 互联诊断均通过。
+- Android → Band、Band → Android 消息均通过；更新 Probe 后，手环的“手环→手机”测试页面也显示 PASS。
+- 用户确认 synthetic 通知实际到达手环并振动：`Notification: PASS`。validation APK 等待 `NotifyApi` Task 8 秒超时：`NotificationApi: TIMEOUT`，其后续回执状态未知。
+- 阶段结论为 **`PASS_WITH_NOTIFY_API_WARNING`**，证明基础 XMS 通信路线可行。此结果只适用于独立 validation APK / Probe RPK，不代表正式产品包、三端额度/任务链路、后台或表盘验收。
+
 ## 0.6.4 已确认项目
 
 - Windows 安装包可在没有 Rust、LLVM 或其他开发环境运行库的普通 Windows 10/11 x64 环境中启动。

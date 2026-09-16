@@ -18,6 +18,12 @@ val releaseKeyAlias = localProperties.getProperty("codexQuotaReleaseKeyAlias")
 val releaseKeyPassword = localProperties.getProperty("codexQuotaReleaseKeyPassword")
 val hasReleaseSigning =
   listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { !it.isNullOrBlank() }
+val validationStoreFile = localProperties.getProperty("codexQuotaValidationStoreFile")
+val validationStorePassword = localProperties.getProperty("codexQuotaValidationStorePassword")
+val validationKeyAlias = localProperties.getProperty("codexQuotaValidationKeyAlias")
+val validationKeyPassword = localProperties.getProperty("codexQuotaValidationKeyPassword")
+val hasValidationSigning =
+  listOf(validationStoreFile, validationStorePassword, validationKeyAlias, validationKeyPassword).all { !it.isNullOrBlank() }
 val demoFiveHourQuota =
   providers.gradleProperty("codexQuotaDemoFiveHour").orElse("false").map(String::toBoolean).get()
 val instrumentationBuildType =
@@ -50,6 +56,17 @@ android {
       }
     }
   }
+  if (hasValidationSigning) {
+    signingConfigs {
+      create("validation") {
+        storeFile = rootProject.file(requireNotNull(validationStoreFile))
+        storeType = "pkcs12"
+        storePassword = requireNotNull(validationStorePassword)
+        keyAlias = requireNotNull(validationKeyAlias)
+        keyPassword = requireNotNull(validationKeyPassword)
+      }
+    }
+  }
 
   buildTypes {
     create("validation") {
@@ -57,7 +74,7 @@ android {
       applicationIdSuffix = ".validation"
       versionNameSuffix = "-validation"
       isDebuggable = true
-      signingConfig = signingConfigs.getByName("debug")
+      signingConfig = signingConfigs.findByName("validation") ?: signingConfigs.getByName("debug")
       matchingFallbacks += listOf("debug")
     }
     release {
@@ -98,6 +115,17 @@ if (
 ) {
   throw GradleException(
     "Release signing is required. Set codexQuotaReleaseStoreFile, codexQuotaReleaseStorePassword, codexQuotaReleaseKeyAlias, and codexQuotaReleaseKeyPassword in ignored android-app/local.properties.",
+  )
+}
+if (
+  !hasValidationSigning &&
+    gradle.startParameter.taskNames.any { taskName ->
+      taskName.contains("assembleValidation", ignoreCase = true) ||
+        taskName.contains("bundleValidation", ignoreCase = true)
+    }
+) {
+  throw GradleException(
+    "Stage 02 validation signing is required. Run band-probe/scripts/prepare-validation-signing.ps1 locally.",
   )
 }
 

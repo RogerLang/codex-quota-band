@@ -5,12 +5,13 @@
 CodexQuota 是一个正在适配 **Xiaomi Smart Band 9 Pro** 的非官方开源项目，用于在 Windows、
 Android 和手环侧查看 Codex 5 小时额度、周额度、重置时间和只读任务状态。
 
-> Band 9 Pro 当前是目标设备 / 适配中，尚未完成真机验收，不能视为已经支持。
+> Band 9 Pro 当前是目标设备 / 适配中。Stage 02D 通信探针已通过真机验证；正式产品链路和表盘尚未验收，不能视为已经支持。
 > 上游曾完成小米手环 10 的 RPK 与三端联动验证；这是 fork 起点的历史事实，不代表本 fork
 > 已完成 Band 9 Pro 验收。
 
-当前开发基线为未发布的 `0.6.5` Foundation。此轮只迁移通信、凭据和 SDK 基础设施，不实现
-Lua 真表盘、AOD、Vela → Lua 文件 IPC 或 336×480 布局。
+当前开发基线为未发布的 `0.6.5` Foundation + Stage 02D 通信验证。Stage 02D 独立 validation APK
+与 Probe RPK 验证了基础 XMS 通信、双向消息以及通知到达和振动；`NotifyApi` Task 的 8 秒回执超时
+保留为观察项。正式 Lua 真表盘、AOD、Vela → Lua IPC 和产品 336×480 UI 尚未实现。
 
 ## 架构
 
@@ -97,7 +98,7 @@ Android runtime application ID 与 Vela package identity 均为 `io.github.roger
 
 ## 当前限制
 
-- Band 9 Pro 尚未进行真实安装、通信、提醒、表盘和布局验收。
+- Band 9 Pro 仅通过独立 Stage 02D 通信探针；正式 APK/RPK identity、额度/任务、三端联动、后台场景及表盘仍未验收。
 - Android 不使用常驻前台服务；进程被系统杀死后不承诺提醒必达。
 - 公共 ntfy 是第三方 relay，虽然看不到业务明文，仍有上述 metadata 可见性和公共服务可用性限制。
 - Foundation 01 已获用户验收；尚未创建 PR 或 Release，构建产物不得被描述为正式发布版本。
@@ -105,6 +106,7 @@ Android runtime application ID 与 Vela package identity 均为 `io.github.roger
 ## 开发文档
 
 - [当前状态](docs/current-status.md)
+- [Band 9 Pro 表盘设计决策](docs/band_9_pro_watchface_design.md)
 - [架构说明](docs/architecture.md)
 - [开发指南](docs/development-guide.md)
 - [安全说明](docs/security.md)

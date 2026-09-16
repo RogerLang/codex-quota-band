@@ -9,7 +9,7 @@
     tools:node="remove" />
   <application
     android:name="android.app.Application"
-    android:label="CodexQuota 验证"
+    android:label="CodexQuota Stage 02D"
     tools:replace="android:name,android:label">
     <activity
       android:name=".MainActivity"

@@ -11,6 +11,25 @@ Foundation 01 **COMPLETE / accepted**；fork 后第一轮基础架构迁移已�
 目标设备改为 **Xiaomi Smart Band 9 Pro**，状态只能写“目标设备 / 适配中”。Foundation 不实现
 Lua 真表盘、AOD、Vela → Lua 文件 IPC 或 Band 9 Pro 336×480 UI，也没有完成 Band 9 Pro 真机验收。
 
+## Stage 02D communication probe
+
+**PASS_WITH_NOTIFY_API_WARNING（2026-09-16，用户真机确认）**。独立 validation APK 与 Probe RPK
+在 Band 9 Pro 上验证了 CleanRoom SDK → Xiaomi backend → 小米运动健康 → 手环的基础通信可行性。
+XMS service、node discovery、授权前后安装查询、`DEVICE_MANAGER`、`NOTIFY` 权限、Vela 互联诊断、
+Android → Band 与 Band → Android 消息均通过；更新 Probe 后手环侧双向消息页面也显示 PASS。
+用户确认测试通知实际到达手环并振动，故 `Notification: PASS`。
+
+`NotificationApi: TIMEOUT` 仅表示 validation APK 的本地 8 秒 Task 等待没有得到完成结果，
+不表示通知失败；回调的后续状态未知。现阶段将其保留为技术观察项，不单独追查、不自动重发，
+也不改正式 `XiaomiWearableBridge` 或 vendored SDK。详细证据见
+[`stage_02_xms_probe_review.md`](stage_02_xms_probe_review.md)。
+
+Stage 02D **不是正式产品包验收**。正式 `io.github.rogerlang.codexquota` APK/RPK identity、
+额度/任务数据、Windows → ntfy → Android → Band 端到端链路、后台/锁屏/网络切换、真表盘、
+Vela → Lua IPC 和 AOD 尚未验证或实现。下一主线是正式 Band 9 Pro 适配；用户已决定最终主 UI
+是真表盘，首版以 weekly quota 为核心，具体约束见
+[`band_9_pro_watchface_design.md`](band_9_pro_watchface_design.md)。Band 9 Pro 仍是“目标设备 / 适配中”。
+
 上游 `0.6.4` / `0.6.5` 曾对小米手环 10 完成或积累三端验证，这是 fork 起点的历史事实；它不能
 作为当前 fork 对 Band 9 Pro 的支持结论。
 
@@ -72,9 +91,7 @@ standalone APK 的 8 项按 `ValidationItem` 定义记录：
   路径覆盖，但未对公共服务故障注入。
 - 正式 Windows → Android 联动，以及正式 App 在网络切换、后台/锁屏情况下的重连和持久 cursor
   行为；standalone APK 的 8/8 PASS 不覆盖这些正式双端场景。
-- CleanRoom SDK（Xiaomi backend）→ 小米运动健康（Mi Fitness）→ Band 9 Pro 的真实连接、权限、
-  消息和提醒尚未验证。
-- Band 9 Pro RPK/package/signature 匹配；Band 9 Pro 尚未真机验证，Vela/Lua 真表盘、AOD 和 UI
-  尚未开始。
+- 正式 Android runtime → 小米运动健康 → Band 9 Pro 的真实额度/任务同步、提醒、后台与重连仍需
+  真机验收。正式 Band 9 Pro RPK、Vela/Lua 真表盘、AOD 和产品 UI 尚未实现。
 
 在以上真机工作完成前，不得写“Band 9 Pro 已支持”。
