@@ -15,9 +15,9 @@ class Stage03AActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       CodexQuotaTheme {
-        Stage03AScreen { report ->
+        Stage03BScreen { report ->
           getSystemService(ClipboardManager::class.java)
-            .setPrimaryClip(ClipData.newPlainText("Stage 03A 脱敏报告", report))
+            .setPrimaryClip(ClipData.newPlainText("Stage 03B 脱敏报告", report))
           Toast.makeText(this, "脱敏报告已复制", Toast.LENGTH_SHORT).show()
         }
       }
