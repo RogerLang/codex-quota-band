@@ -5,13 +5,14 @@
   <uses-feature android:name="android.hardware.camera.any" tools:node="remove" />
   <application
     android:name="android.app.Application"
-    android:label="CodexQuota Stage 03A"
+    android:label="CodexQuota Stage 03E"
     tools:replace="android:name,android:label">
     <activity android:name=".MainActivity" tools:node="remove" />
     <activity android:name=".pairing.PairingActivity" tools:node="remove" />
     <activity android:name=".validation.ValidationActivity" tools:node="remove" />
+    <activity android:name=".validation.Stage03AActivity" tools:node="remove" />
     <activity
-      android:name=".validation.Stage03AActivity"
+      android:name=".validation.Stage03ENotifyActivity"
       android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
