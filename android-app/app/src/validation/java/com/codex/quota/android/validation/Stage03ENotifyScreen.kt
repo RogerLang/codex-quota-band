@@ -77,6 +77,12 @@ internal fun Stage03ENotifyScreen(copyReport: (String) -> Unit) {
             fontSize = CodexTokens.Type.Supporting,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+          Text(
+            "若 XMS 只返回 1 个 connected node，即使名称不匹配 Band 9 Pro，也仅在本 validation probe 中使用 single-node fallback；不会把该规则带入正式 runtime。",
+            modifier = Modifier.padding(top = CodexTokens.Space.Md),
+            fontSize = CodexTokens.Type.Supporting,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
           Button(
             onClick = {
               running = true
@@ -103,7 +109,10 @@ internal fun Stage03ENotifyScreen(copyReport: (String) -> Unit) {
         ) {
           Column(Modifier.padding(CodexTokens.Space.Lg)) {
             Text("Node: ${value.nodeResult}", fontSize = CodexTokens.Type.Body)
-            Text("NOTIFY permission: ${value.notifyPermission}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Body)
+            Text("Connected nodes: ${value.connectedNodeCount}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
+            Text("Band 9 Pro name matches: ${value.band9ProMatchCount}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
+            Text("Selection: ${value.nodeSelection}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
+            Text("NOTIFY permission: ${value.notifyPermission}", modifier = Modifier.padding(top = CodexTokens.Space.Md), fontSize = CodexTokens.Type.Body)
             Text("Notify request: ${value.notifyRequest}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Body)
             Text("Node attempt: ${value.nodeAttempt}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
           }
