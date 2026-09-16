@@ -25,17 +25,33 @@ class Stage03ENotifyTest {
       connectedNodeCount = 1,
       band9ProMatchCount = 0,
       nodeSelection = "SINGLE_NODE_FALLBACK",
+      wearAppInstalled = "TRUE",
+      deviceManagerPermission = "PASS",
     ).report()
 
     assertTrue(report.contains("CodexQuota Stage 03E"))
     assertTrue(report.contains("ConnectedNodes: 1"))
     assertTrue(report.contains("Band9ProMatches: 0"))
     assertTrue(report.contains("NodeSelection: SINGLE_NODE_FALLBACK"))
+    assertTrue(report.contains("WearAppInstalled: TRUE"))
+    assertTrue(report.contains("DeviceManagerPermission: PASS"))
+    assertTrue(report.contains("NotifyPermission: PASS"))
     assertTrue(report.contains("TitleMarker: CQNOTIFY-47-A9F3"))
     assertTrue(report.contains("BodyMarker: SEQ47-WEEK38-RUN2"))
     assertTrue(report.contains("BandReceipt: USER_OBSERVATION"))
     assertFalse(report.contains("deviceId", ignoreCase = true))
     assertFalse(report.contains("authorization", ignoreCase = true))
+  }
+
+  @Test
+  fun defaultResultKeepsPermissionPrerequisitesUnobserved() {
+    val result = Stage03ENotifyResult(
+      nodeResult = "NODE_NOT_FOUND",
+      notifyPermission = "NOT_CHECKED",
+      notifyRequest = "NOT_SENT",
+    )
+    assertEquals("NOT_CHECKED", result.wearAppInstalled)
+    assertEquals("NOT_CHECKED", result.deviceManagerPermission)
   }
 
   @Test
