@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "node ../band-app/node_modules/aiot-toolkit/lib/bin.js release && npm run test:built",
-    "test": "node --test test/stage03-state.test.cjs",
+    "test": "node --test test/stage03-state.test.cjs test/stage03c-auto-return.test.cjs",
     "test:built": "node --test test/built.test.cjs"
   }
 }
