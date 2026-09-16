@@ -1,0 +1,15 @@
+<template>
+  <div class="relay"></div>
+</template>
+
+<script>
+export default {}
+</script>
+
+<style>
+.relay {
+  width: 336px;
+  height: 480px;
+  background-color: #000000;
+}
+</style>
