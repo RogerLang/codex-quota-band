@@ -4,6 +4,8 @@ import android.content.Context
 import com.codex.quota.android.runtime.XiaomiWearableBackend
 import com.xiaomi.xms.wearable.Wearable
 import com.xiaomi.xms.wearable.auth.Permission
+import com.xiaomi.xms.wearable.exception.AppNotInstalledException
+import com.xiaomi.xms.wearable.exception.PermissionDeniedException
 import com.xiaomi.xms.wearable.tasks.Task
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
@@ -22,6 +24,8 @@ internal data class Stage03ENotifyResult(
   val connectedNodeCount: Int = 0,
   val band9ProMatchCount: Int = 0,
   val nodeSelection: String = "NONE",
+  val wearAppInstalled: String = "NOT_CHECKED",
+  val deviceManagerPermission: String = "NOT_CHECKED",
 ) {
   fun report(): String = buildString {
     appendLine("CodexQuota Stage 03E")
@@ -29,6 +33,8 @@ internal data class Stage03ENotifyResult(
     appendLine("ConnectedNodes: $connectedNodeCount")
     appendLine("Band9ProMatches: $band9ProMatchCount")
     appendLine("NodeSelection: $nodeSelection")
+    appendLine("WearAppInstalled: $wearAppInstalled")
+    appendLine("DeviceManagerPermission: $deviceManagerPermission")
     appendLine("NotifyPermission: $notifyPermission")
     appendLine("NotifyRequest: $notifyRequest")
     appendLine("NodeAttempt: $nodeAttempt")
@@ -75,8 +81,6 @@ internal class Stage03ENotifyRunner(context: Context) {
   suspend fun sendProbe(): Stage03ENotifyResult {
     val query = retryStage02(
       query = { await(nodeApi.connectedNodes) },
-      // Stage 03E is validation-only. Stop as soon as XMS returns any connected node so
-      // the result can distinguish "no node" from "node name did not match".
       ready = { nodes -> nodes.isNotEmpty() },
       pause = { delay(it) },
     )
@@ -104,16 +108,47 @@ internal class Stage03ENotifyRunner(context: Context) {
       )
     }
 
-    val permission = ensureNotifyPermission(node.id)
-    if (!permission) {
+    val installed = wearAppInstalledState(node.id)
+    if (installed != "TRUE") {
       return Stage03ENotifyResult(
         nodeResult = "NODE_FOUND",
-        notifyPermission = "DENIED",
+        notifyPermission = "NOT_CHECKED",
         notifyRequest = "NOT_SENT",
         nodeAttempt = query.attempt,
         connectedNodeCount = nodes.size,
         band9ProMatchCount = choice.matchCount,
         nodeSelection = choice.selection,
+        wearAppInstalled = installed,
+      )
+    }
+
+    val deviceManager = ensurePermission(node.id, Permission.DEVICE_MANAGER)
+    if (deviceManager != "PASS") {
+      return Stage03ENotifyResult(
+        nodeResult = "NODE_FOUND",
+        notifyPermission = "NOT_CHECKED",
+        notifyRequest = "NOT_SENT",
+        nodeAttempt = query.attempt,
+        connectedNodeCount = nodes.size,
+        band9ProMatchCount = choice.matchCount,
+        nodeSelection = choice.selection,
+        wearAppInstalled = installed,
+        deviceManagerPermission = deviceManager,
+      )
+    }
+
+    val notifyPermission = ensurePermission(node.id, Permission.NOTIFY)
+    if (notifyPermission != "PASS") {
+      return Stage03ENotifyResult(
+        nodeResult = "NODE_FOUND",
+        notifyPermission = notifyPermission,
+        notifyRequest = "NOT_SENT",
+        nodeAttempt = query.attempt,
+        connectedNodeCount = nodes.size,
+        band9ProMatchCount = choice.matchCount,
+        nodeSelection = choice.selection,
+        wearAppInstalled = installed,
+        deviceManagerPermission = deviceManager,
       )
     }
 
@@ -124,27 +159,66 @@ internal class Stage03ENotifyRunner(context: Context) {
       if (callback != null) "CALLBACK_SUCCESS" else "REQUESTED_CALLBACK_TIMEOUT"
     } catch (error: Exception) {
       rethrowCancellation(error)
-      "REQUEST_FAILED"
+      when (error) {
+        is AppNotInstalledException -> "RPK_REQUIRED"
+        is PermissionDeniedException -> "PERMISSION_DENIED"
+        else -> "REQUEST_FAILED"
+      }
     }
 
     return Stage03ENotifyResult(
       nodeResult = "NODE_FOUND",
-      notifyPermission = "PASS",
+      notifyPermission = notifyPermission,
       notifyRequest = requestResult,
       nodeAttempt = query.attempt,
       connectedNodeCount = nodes.size,
       band9ProMatchCount = choice.matchCount,
       nodeSelection = choice.selection,
+      wearAppInstalled = installed,
+      deviceManagerPermission = deviceManager,
     )
   }
 
-  private suspend fun ensureNotifyPermission(nodeId: String): Boolean = try {
-    if (await(authApi.checkPermission(nodeId, Permission.NOTIFY))) return true
-    await(authApi.requestPermission(nodeId, Permission.NOTIFY))
-    await(authApi.checkPermission(nodeId, Permission.NOTIFY))
+  private suspend fun wearAppInstalledState(nodeId: String): String = try {
+    if (await(nodeApi.isWearAppInstalled(nodeId))) "TRUE" else "FALSE"
   } catch (error: Exception) {
     rethrowCancellation(error)
-    false
+    when (error) {
+      is AppNotInstalledException -> "FALSE"
+      is PermissionDeniedException -> "PERMISSION_DENIED"
+      else -> "ERROR"
+    }
+  }
+
+  private suspend fun ensurePermission(nodeId: String, permission: Permission): String {
+    try {
+      if (await(authApi.checkPermission(nodeId, permission))) return "PASS"
+    } catch (error: Exception) {
+      rethrowCancellation(error)
+      if (error is AppNotInstalledException) return "RPK_REQUIRED"
+    }
+
+    try {
+      await(authApi.requestPermission(nodeId, permission))
+    } catch (error: Exception) {
+      rethrowCancellation(error)
+      return when (error) {
+        is AppNotInstalledException -> "RPK_REQUIRED"
+        is PermissionDeniedException -> "DENIED"
+        else -> if (error.message == "permission denied") "DENIED" else "REQUEST_FAILED"
+      }
+    }
+
+    return try {
+      if (await(authApi.checkPermission(nodeId, permission))) "PASS" else "DENIED"
+    } catch (error: Exception) {
+      rethrowCancellation(error)
+      when (error) {
+        is AppNotInstalledException -> "RPK_REQUIRED"
+        is PermissionDeniedException -> "DENIED"
+        else -> "CHECK_FAILED"
+      }
+    }
   }
 
   private fun rethrowCancellation(error: Exception) {
