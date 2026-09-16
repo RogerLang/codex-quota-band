@@ -1,6 +1,6 @@
 {
   "package": "io.github.rogerlang.codexquota.validation",
-  "name": "CodexQuota Stage 03A Probe",
+  "name": "CodexQuota Stage 03C Probe",
   "versionName": "0.6.5",
   "versionCode": 607,
   "minPlatformVersion": 1200,
@@ -14,6 +14,9 @@
   "config": { "logLevel": "log", "designWidth": 336 },
   "router": {
     "entry": "pages/index",
-    "pages": { "pages/index": { "component": "index" } }
+    "pages": {
+      "pages/index": { "component": "index" },
+      "pages/relay": { "component": "relay" }
+    }
   }
 }
