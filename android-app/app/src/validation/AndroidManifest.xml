@@ -5,7 +5,7 @@
   <uses-feature android:name="android.hardware.camera.any" tools:node="remove" />
   <application
     android:name="android.app.Application"
-    android:label="CodexQuota Stage 03A"
+    android:label="CodexQuota Stage 03B"
     tools:replace="android:name,android:label">
     <activity android:name=".MainActivity" tools:node="remove" />
     <activity android:name=".pairing.PairingActivity" tools:node="remove" />
