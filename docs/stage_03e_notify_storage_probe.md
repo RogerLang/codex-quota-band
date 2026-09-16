@@ -1,7 +1,7 @@
 # Stage 03E NotifyApi -> system-storage -> Lua probe
 
 Date prepared: 2026-09-16.
-Status: **prepared for build and real-device validation; no device result yet**.
+Status: **real-device storage test still inconclusive; Android notification was not sent because node discovery did not select the connected wearable.**
 
 ## Why this stage exists
 
@@ -51,6 +51,9 @@ Stage 03E must remain strictly inside these limits:
 7. Do not send Codex/OpenAI credentials, prompts, task content, or real quota data during this probe.
 8. Keep the probe I/O bounded: only database tail windows and a small capped set of notification files are
    scanned, at a low cadence, for a finite probe window.
+9. The validation APK may use a **single connected node fallback only when XMS returns exactly one node and
+   the Band 9 Pro display-name matcher finds no match**. This is diagnostic-only and must not be copied into
+   the formal runtime without separate approval.
 
 ## Synthetic markers
 
@@ -87,23 +90,56 @@ No RPK should be produced for Stage 03E.
 The validation APK keeps the isolated validation identity and signing setup already used by earlier
 Band 9 Pro probes. The watchface uses EasyFace device type `367` and 336x480 Lua/LVGL layout.
 
-## Real-device procedure
+## First real-device attempt
 
-1. Build the validation APK and Stage 03E `.face` only.
-2. Remove or avoid opening any old Stage 03C/03D experimental RPK; Stage 03E does not need an RPK.
-3. Install the Stage 03E `.face` and select it as the current watchface.
-4. Confirm the face renders normally and shows an initial probe status; if it stalls or makes the band
-   unstable, stop immediately and restore a known-good watchface.
-5. Install/update the Stage 03E validation APK on the Android phone.
-6. Within about 30 seconds of selecting the watchface, press `发送测试通知` once.
-7. Confirm whether the Band 9 Pro receives and vibrates for the synthetic notification.
-8. Dismiss the notification overlay if necessary and return to the Stage 03E watchface.
-9. Wait up to 45 seconds (three 15-second scan cycles) and record the watchface result. If still
-   `NOT FOUND`, it is acceptable to leave the face selected until the bounded scan window ends, but do not
-   keep restarting the probe repeatedly.
-10. Copy the Android sanitized report.
-11. After recording the result, restore the user's normal watchface; Stage 03E is a diagnostic probe, not
-    a daily-use face.
+The hardened Stage 03E watchface rendered normally and reported:
+
+```text
+NOT FOUND
+SCAN 2/12
+DB R 1/2
+DIR R 0
+DIR_ENUM_UNAVAILABLE
+sources readable
+```
+
+The paired Android validation APK, however, reported twice:
+
+```text
+Node: NODE_NOT_FOUND
+NotifyPermission: NOT_CHECKED
+NotifyRequest: NOT_SENT
+NodeAttempt: 3
+```
+
+Therefore the synthetic marker notification was never sent. The visible `NOT FOUND` result cannot be
+interpreted as evidence against the notification-storage bridge. It only establishes that one of the two
+bounded database candidates was readable on this firmware and that `io.popen` directory enumeration was
+unavailable in the watchface runtime.
+
+The retry APK now reports only sanitized node diagnostics:
+
+```text
+ConnectedNodes: <count>
+Band9ProMatches: <count>
+NodeSelection: NAME_MATCH | SINGLE_NODE_FALLBACK | AMBIGUOUS_NAME_MATCH | NONE
+```
+
+It never reports node id, MAC address, raw node name, serial number, or another device identifier.
+
+## Real-device retry procedure
+
+1. Keep the already-installed hardened Stage 03E `.face`; no watchface rebuild is needed for this retry.
+2. Do not open any old Probe RPK.
+3. Install/update only the new Stage 03E validation APK.
+4. Confirm Mi Fitness shows the Band 9 Pro connected.
+5. Press `发送测试通知` once.
+6. Copy the sanitized Android report.
+7. If `NotifyRequest` is `CALLBACK_SUCCESS` or `REQUESTED_CALLBACK_TIMEOUT` and the band visibly receives
+   the notification, return to the Stage 03E watchface.
+8. Wait 15–45 seconds and record the watchface result.
+9. If the Android report still says `NOT_SENT`, stop; the storage result remains inconclusive.
+10. Restore the user's normal watchface after the result is recorded.
 
 If the band becomes unstable, reboots unexpectedly, or the watchface repeatedly stalls, stop the probe
 and restore a known-good watchface before any further experiment.
@@ -116,7 +152,7 @@ and restore a known-good watchface before any further experiment.
 | yes | `PARTIAL` | One field is visible; promising but insufficient for a reliable quota payload bridge. |
 | yes | `NOT FOUND` + sources readable | Negative result for these candidate paths / bounded clear-text representation only. |
 | yes | sources unreadable | Inconclusive: notification delivery works, but Lua cannot read the tested storage. |
-| no | any | Inconclusive for storage; first diagnose NotifyApi delivery / permission / connection. |
+| no / not sent | any | Inconclusive for storage; first diagnose NotifyApi delivery / permission / connection. |
 
 `REQUESTED_CALLBACK_TIMEOUT` on Android does not by itself mean NotifyApi delivery failed; as in the
 previous real-device probe, actual band receipt is the decisive observation for notification delivery.
