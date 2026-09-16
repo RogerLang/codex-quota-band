@@ -19,10 +19,16 @@ internal data class Stage03ENotifyResult(
   val notifyPermission: String,
   val notifyRequest: String,
   val nodeAttempt: Int = 0,
+  val connectedNodeCount: Int = 0,
+  val band9ProMatchCount: Int = 0,
+  val nodeSelection: String = "NONE",
 ) {
   fun report(): String = buildString {
     appendLine("CodexQuota Stage 03E")
     appendLine("Node: $nodeResult")
+    appendLine("ConnectedNodes: $connectedNodeCount")
+    appendLine("Band9ProMatches: $band9ProMatchCount")
+    appendLine("NodeSelection: $nodeSelection")
     appendLine("NotifyPermission: $notifyPermission")
     appendLine("NotifyRequest: $notifyRequest")
     appendLine("NodeAttempt: $nodeAttempt")
@@ -35,6 +41,22 @@ internal data class Stage03ENotifyResult(
 internal object Stage03ENotifyProbe {
   const val TITLE = "CQNOTIFY-47-A9F3"
   const val BODY = "SEQ47-WEEK38-RUN2"
+}
+
+internal data class Stage03ENodeChoice(
+  val index: Int?,
+  val matchCount: Int,
+  val selection: String,
+)
+
+internal fun chooseStage03ENode(names: List<String?>): Stage03ENodeChoice {
+  val matches = names.indices.filter { isBand9ProNodeName(names[it]) }
+  return when {
+    matches.size == 1 -> Stage03ENodeChoice(matches.single(), 1, "NAME_MATCH")
+    matches.size > 1 -> Stage03ENodeChoice(null, matches.size, "AMBIGUOUS_NAME_MATCH")
+    names.size == 1 -> Stage03ENodeChoice(0, 0, "SINGLE_NODE_FALLBACK")
+    else -> Stage03ENodeChoice(null, 0, "NONE")
+  }
 }
 
 internal class Stage03ENotifyRunner(context: Context) {
@@ -53,7 +75,9 @@ internal class Stage03ENotifyRunner(context: Context) {
   suspend fun sendProbe(): Stage03ENotifyResult {
     val query = retryStage02(
       query = { await(nodeApi.connectedNodes) },
-      ready = { nodes -> nodes.any { isBand9ProNodeName(it.name) } },
+      // Stage 03E is validation-only. Stop as soon as XMS returns any connected node so
+      // the result can distinguish "no node" from "node name did not match".
+      ready = { nodes -> nodes.isNotEmpty() },
       pause = { delay(it) },
     )
     if (query.error != null) {
@@ -64,12 +88,33 @@ internal class Stage03ENotifyRunner(context: Context) {
         nodeAttempt = query.attempt,
       )
     }
-    val node = query.value.orEmpty().firstOrNull { isBand9ProNodeName(it.name) }
-      ?: return Stage03ENotifyResult("NODE_NOT_FOUND", "NOT_CHECKED", "NOT_SENT", query.attempt)
+
+    val nodes = query.value.orEmpty()
+    val choice = chooseStage03ENode(nodes.map { it.name })
+    val node = choice.index?.let(nodes::get)
+    if (node == null) {
+      return Stage03ENotifyResult(
+        nodeResult = if (choice.selection == "AMBIGUOUS_NAME_MATCH") "NODE_AMBIGUOUS" else "NODE_NOT_FOUND",
+        notifyPermission = "NOT_CHECKED",
+        notifyRequest = "NOT_SENT",
+        nodeAttempt = query.attempt,
+        connectedNodeCount = nodes.size,
+        band9ProMatchCount = choice.matchCount,
+        nodeSelection = choice.selection,
+      )
+    }
 
     val permission = ensureNotifyPermission(node.id)
     if (!permission) {
-      return Stage03ENotifyResult("NODE_FOUND", "DENIED", "NOT_SENT", query.attempt)
+      return Stage03ENotifyResult(
+        nodeResult = "NODE_FOUND",
+        notifyPermission = "DENIED",
+        notifyRequest = "NOT_SENT",
+        nodeAttempt = query.attempt,
+        connectedNodeCount = nodes.size,
+        band9ProMatchCount = choice.matchCount,
+        nodeSelection = choice.selection,
+      )
     }
 
     val requestResult = try {
@@ -87,6 +132,9 @@ internal class Stage03ENotifyRunner(context: Context) {
       notifyPermission = "PASS",
       notifyRequest = requestResult,
       nodeAttempt = query.attempt,
+      connectedNodeCount = nodes.size,
+      band9ProMatchCount = choice.matchCount,
+      nodeSelection = choice.selection,
     )
   }
 
