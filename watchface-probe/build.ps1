@@ -25,7 +25,34 @@ if ($actual -ne $pinned) { throw "Unexpected LuaDevTemplate revision: $actual" }
 
 New-Item -ItemType Directory -Path (Join-Path $work 'app\lua'),(Join-Path $work 'images') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $source 'app\lua\main.lua') -Destination (Join-Path $work 'app\lua\main.lua') -Force
-Copy-Item -LiteralPath (Join-Path $template 'watchface\fprj\images\preview.png') -Destination (Join-Path $work 'images\preview.png') -Force
+
+# Compiler.exe requires a 280x328 watchface preview thumbnail for DeviceType 367.
+# This is package metadata only; the actual Lua widget remains 336x480.
+$preview = Join-Path $work 'images\preview.png'
+Add-Type -AssemblyName System.Drawing
+$bitmap = New-Object System.Drawing.Bitmap 280,328
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+try {
+  $graphics.Clear([System.Drawing.Color]::Black)
+  $fontTitle = New-Object System.Drawing.Font('Arial', 18, [System.Drawing.FontStyle]::Bold)
+  $fontBody = New-Object System.Drawing.Font('Arial', 13, [System.Drawing.FontStyle]::Regular)
+  $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+  $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(114,214,166))
+  try {
+    $graphics.DrawString('CodexQuota', $fontTitle, $white, 73, 92)
+    $graphics.DrawString('Stage 03A Probe', $fontBody, $green, 82, 132)
+    $graphics.DrawString('SEQ 42 -> 43', $fontBody, $white, 90, 174)
+  } finally {
+    $fontTitle.Dispose()
+    $fontBody.Dispose()
+    $white.Dispose()
+    $green.Dispose()
+  }
+  $bitmap.Save($preview, [System.Drawing.Imaging.ImageFormat]::Png)
+} finally {
+  $graphics.Dispose()
+  $bitmap.Dispose()
+}
 
 # EasyFace-compatible projects in the community examples are UTF-16LE XML.
 $xml = Get-Content -LiteralPath (Join-Path $source 'Stage03AProbe.fprj') -Raw -Encoding UTF8
