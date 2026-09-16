@@ -4,15 +4,26 @@
 基线：`main` / `ef4b958e0b6904035ba92b8a0874bb2e06734b7a`
 远端：`origin https://github.com/RogerLang/codex-quota-band.git`
 
-## 结论
+## 最终结论
 
-本地 Foundation 迁移已形成可审阅的未提交 diff：Android 已从 proprietary XMS AAR 切到固定
+**Foundation 01 COMPLETE / accepted。** 用户已在 Android 手机上确认最终 Foundation 01R standalone
+validation APK **8/8 PASS**。正式 Foundation 提交
+`7c505a882f3a20ed4973cc1b6f2d51c205a22466` 已推送至 `origin/main`；未创建 PR 或 GitHub
+Release，`0.6.5` 仍未正式发布。本报告以下保留各阶段审阅过程；其中的 working tree、未提交、未真机
+测试等描述均是**当时的历史快照**，不能覆盖本节及文末的最终状态。
+
+Android standalone 8/8 不代表正式 Windows → Android 双端联动或手环链路通过；Band 9 Pro 与
+CleanRoom → 小米运动健康（Mi Fitness）→ Band 9 Pro 均尚未真机验证，Vela/Lua 真表盘尚未开始。
+
+## 提交前审阅结论（历史）
+
+当时本地 Foundation 迁移形成可审阅的未提交 diff：Android 已从 proprietary XMS AAR 切到固定
 commit 的 CleanRoom 源码模块；Windows → Android 正式链路已切到 ntfy 端到端加密 relay；正式配对
 改为二维码 relay credential；Android application ID 与 Vela package identity 已迁移到
 `io.github.rogerlang.codexquota`。
 
-自动测试、Android debug APK 构建和保留的 legacy RPK 构建均通过。没有执行 commit、push、PR 或
-Release，也没有开始 Band 9 Pro Lua watchface、AOD、336×480 UI 或 Vela → Lua IPC。
+自动测试、Android debug APK 构建和保留的 legacy RPK 构建均通过。该审阅阶段尚未执行 commit、
+push、PR 或 Release，也没有开始 Band 9 Pro Lua watchface、AOD、336×480 UI 或 Vela → Lua IPC。
 
 ## 架构
 
@@ -138,7 +149,7 @@ Legacy debug RPK：`band-app/dist/io.github.rogerlang.codexquota.debug.0.6.5.rpk
 JVM codec、cipher、parser 与完整 APK 编译已经通过。`npm ci` 报告了既有依赖树的 audit 风险（根目录
 7 个 high；band-app 3 low / 2 moderate / 19 high），本任务没有擅自升级依赖或运行破坏性 audit fix。
 
-## 尚未真机验证（当时的阶段性状态；后续结果见 Foundation 01V）
+## 尚未真机验证（当时的阶段性状态；后续结果见 Foundation 01R 最终结论）
 
 - Windows → 公共 ntfy.sh → Android 的随机虚构数据 smoke（可选，未向公共 relay 发送任何数据）。
 - Android Wi-Fi/移动数据切换、后台/锁屏、进程重启后的 `since=latest` 和 cursor replay。
@@ -208,7 +219,8 @@ JVM codec、cipher、parser 与完整 APK 编译已经通过。`npm ci` 报告�
 26 files changed, 1032 insertions(+), 816 deletions(-)
 ```
 
-交付状态：**no commit / no push / no PR / no Release**。工作区 diff 保留给 owner 审阅。
+当时交付状态：**no commit / no push / no PR / no Release**；工作区 diff 留给 owner 审阅。
+后续正式提交与推送见本报告“最终结论”。
 
 ## Foundation 01V real transport validation
 
@@ -293,11 +305,13 @@ Debug APK：`android-app/app/build/outputs/apk/debug/app-debug.apk`，47,157,022
 Instrumented APK：`android-app/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`，
 1,063,470 bytes，SHA-256 `77152689DACFE2D11565252F664CA1DCA1890EFF0B6F20A60DFEEE81E93168D3`。
 
-仍未验证：Android Keystore 真机执行、Android 正式 subscriber 的公共 ntfy 接收/重连/tamper/replay、
-Android logcat，以及全部 Band 9 Pro / CleanRoom → 小米运动健康真机内容。没有开始 MessageApi、NotifyApi、
+截至该阶段尚未验证：Android Keystore 真机执行、Android 正式 subscriber 的公共 ntfy
+接收/重连/tamper/replay、Android logcat，以及全部 Band 9 Pro / CleanRoom → 小米运动健康真机内容。
+其中 Android standalone 项目后来由最终 8/8 真机验证覆盖；Android logcat、正式双端与 Band 9 Pro
+仍未据此验收。没有开始 MessageApi、NotifyApi、
 Vela background、quota push、Lua、watchface、336×480 UI、AOD、自建 ntfy 或正式签名/发布工作。
 
-当前 `git status --short`：
+当时 `git status --short`：
 
 ```text
  M AGENTS.md
@@ -347,14 +361,14 @@ Vela background、quota push、Lua、watchface、336×480 UI、AOD、自建 ntfy
 ?? windows-native/tests/relay_runtime.rs
 ```
 
-当前 `git diff --stat`（tracked 文件；untracked 新文件见上方状态）：
+当时 `git diff --stat`（tracked 文件；untracked 新文件见上方状态）：
 
 ```text
 27 files changed, 1038 insertions(+), 818 deletions(-)
 ```
 
-Foundation 01V 交付状态：**no commit / no push / no PR / no Release**。工作区仍全部保留为 owner 可审阅的
-未提交修改。
+该阶段 Foundation 01V 交付状态：**no commit / no push / no PR / no Release**；工作区当时仍是
+owner 可审阅的未提交修改。后续正式提交与推送见本报告“最终结论”。
 
 ## Foundation 01V standalone validation APK
 
@@ -418,12 +432,11 @@ APK。它只要求 Android 手机能够访问互联网；用户安装后只需�
 ### 真机状态
 
 用户已在 Android 手机上安装上述 Foundation 01V APK，并反馈原版页面 **7/7 测试全部 PASS**。
-这是用户报告的真机结果；本仓库没有独立取得截图、Android 版本或原始设备日志。后续 Foundation 01R
-把恢复测试拆成两项，新构建的 8 项验证 APK **尚未重新进行手机真机测试**，不得把原版 7/7
-推断成新版 8/8。正式 Windows → Android 端到端及手环真机验收仍未完成。没有开始 Band 9 Pro、
-Vela、Lua watchface、XMS 真机测试或下一阶段工作。
+这是原版 7 项的历史真机结果；后续 Foundation 01R 把恢复测试拆成两项，用户又独立确认了新版
+**8/8 真机 PASS**，并非从原版 7/7 推断。正式 Windows → Android 端到端及手环真机验收仍未完成；
+没有开始 Band 9 Pro、Vela/Lua 真表盘或 XMS 真机测试。
 
-### 当前 Git 状态
+### 当时 Git 状态
 
 `git status --short`：
 
@@ -484,14 +497,15 @@ Vela、Lua watchface、XMS 真机测试或下一阶段工作。
 29 files changed, 1163 insertions(+), 819 deletions(-)
 ```
 
-Foundation 01V standalone APK 交付状态：**no commit / no push / no PR / no Release**。当前 Foundation 01
-working tree 原样保留，未执行 reset、clean 或 stash。
+Foundation 01V standalone APK 当时交付状态：**no commit / no push / no PR / no Release**；
+Foundation 01 working tree 当时原样保留，未执行 reset、clean 或 stash。后续正式提交与推送见
+本报告“最终结论”。
 
 ## Foundation 01R review
 
 日期：2026-09-16。本节只处理 final diff review 的 5 条 finding；Foundation 01 架构和产品范围不扩张。
-前面的 01V Git 状态与构建表是当时的交付快照，以下为本轮结果。用户确认原版 01V 验证 APK 在
-Android 真机 **7/7 PASS**；这个结论只覆盖原版 7 项，不代表新版 01R 的 8 项或正式 Windows →
+前面的 01V Git 状态与构建表是当时的交付快照，以下记录 5 条 finding 的修复过程。用户确认原版
+01V APK **7/7 PASS**，随后又确认 01R APK **8/8 PASS**；两次结果均不代表正式 Windows →
 Android 联动已经真机通过。
 
 ### P1-1 Relay 在线不等于电脑在线
@@ -536,18 +550,19 @@ Android 联动已经真机通过。
   接受的 message ID/sequence，断线期间发布一条新的 synthetic snapshot，不清除 cursor；重建正式
   subscriber 后验证找回漏掉的新状态并推进 cursor。两项分别 PASS/FAIL、分别报告。
 - Test evidence：Android JVM 新增持久 cursor URL/下一条缓存消息接收测试，129/129 通过；新版
-  validation APK 构建与 lint 通过。原版 7/7 用户真机 PASS **不**作为新版 8/8 的证据。
-- Remaining risk：新版 8 项 APK 尚未由用户在 Android 手机上复测；公共 ntfy 实时缓存行为仍需该
-  次真机结果确认。
+  validation APK 构建与 lint 通过，且用户在 Android 真机独立确认新版 **8/8 PASS**。原版 7/7
+  不充当新版证据。
+- Remaining risk：standalone APK 已验证两种恢复路径，但正式 App 在网络切换、后台/锁屏以及
+  Windows 双端联动下的恢复行为仍未真机验收。
 
 ### P2-2 真机结论与文档
 
 - Root cause：01V 报告末尾仍写 Android 真机待验证，与用户随后确认的 7/7 PASS 不符。
-- Fix：更新 01V 真机状态，并在本节区分旧版 7/7 用户反馈、新版 8 项未复测，以及尚未完成的正式
-  Windows → Android/手环真机验收；历史章节只表示当时的阶段性状态。
-- Test evidence：用户在本任务对话中明确反馈“7项测试全都pass”；报告不推断不存在的截图、设备日志
-  或新版测试结果。
-- Remaining risk：未独立核验截图/原始日志；新版 01R 真机结果待用户实际安装后提供。
+- Fix：更新 01V 真机状态，随后记录新版 01R 8/8 用户真机确认，并与尚未完成的正式 Windows →
+  Android/手环真机验收区分；历史章节只表示当时的阶段性状态。
+- Test evidence：用户先反馈原版“7项测试全都pass”，随后明确确认最终 standalone APK
+  **8/8 真机 PASS**；报告不虚构截图、设备日志或正式双端结果。
+- Remaining risk：未独立核验截图/原始日志；正式双端与 Band 9 Pro 验收仍待对应阶段开展。
 
 ### 自动验证与本地产物
 
@@ -566,13 +581,15 @@ Android 联动已经真机通过。
 
 - 大小：46,321,961 bytes；SHA-256：`7A0A9534CCAF749FA36A9962763DA010B56EFD2247FC2DE9C35E9013AAD1CD10`
 - application ID：`io.github.rogerlang.codexquota.validation`；版本：`0.6.5-validation` / `607`；
-  APK Signature Scheme v2 校验通过；**尚未真机复测**。
+  APK Signature Scheme v2 校验通过；用户已确认 **8/8 Android 真机 PASS**。
 - Debug APK：`D:\github_repo\codex-quota-band\android-app\app\build\outputs\apk\debug\app-debug.apk`；
   大小 47,157,022 bytes；SHA-256：`6B8FDBFDF47CBBA5B9CE9A3960C0599248D0050E48E5FBE27163C7D04B6CBDD7`。
 
-本轮保持 **no commit / no push / no PR / no Release**；未 reset、clean 或 stash，也未进入 Stage 02。
+01R review 当时保持 **no commit / no push / no PR / no Release**；未 reset、clean 或 stash，也未
+进入 Stage 02。随后 Foundation 01 已以 `7c505a882f3a20ed4973cc1b6f2d51c205a22466` 提交并
+推送至 `origin/main`，仍未创建 PR 或 Release。
 
-### 本轮结束时 Git 状态
+### 01R review 当时结束时的 Git 状态
 
 `git diff --check` 退出码为 0，无 whitespace error；仅有工作区 LF→CRLF 提示。
 `git diff --stat`（仅已跟踪文件；未跟踪文件见下方状态）：
@@ -635,3 +652,28 @@ Android 联动已经真机通过。
 ?? windows-native/tests/relay_public_smoke.rs
 ?? windows-native/tests/relay_runtime.rs
 ```
+
+## Foundation 01 closure — 最终验收记录
+
+**Foundation 01 COMPLETE / accepted。** 用户确认最终 Foundation 01R standalone validation APK 在
+Android 真机 **8/8 PASS**。按 APK 中 `ValidationItem` 的八项定义记录如下；原版 01V 的 7/7 是
+先前的独立历史结果，不替代本次 8/8：
+
+| ValidationItem | 页面项目 | 真机结果 |
+| --- | --- | --- |
+| `Keystore` | 安全密钥存储 | PASS |
+| `Relay` | ntfy 实时接收 | PASS |
+| `Encryption` | 加密解密 | PASS |
+| `LatestRecovery` | 无 cursor 最新缓存恢复 | PASS |
+| `CursorRecovery` | 持久 cursor 断线恢复 | PASS |
+| `Tamper` | 篡改拒绝 | PASS |
+| `Replay` | 重复消息拒绝 | PASS |
+| `Rollback` | 旧消息拒绝 | PASS |
+
+这是用户确认的 Android standalone synthetic-data 验证结果；本仓库未独立取得截图或原始设备日志。
+验证 App 自行发布虚构状态，不能据此宣称正式 Windows → Android 联动、正式 App 后台/锁屏与网络切换、
+CleanRoom → 小米运动健康（Mi Fitness）→ Band 9 Pro 链路或 Band 9 Pro 真机通过。Band 9 Pro
+仍是“目标设备 / 适配中”；Vela/Lua 真表盘、AOD 和 Band 9 Pro UI 尚未开始。
+
+正式 Foundation 01 提交：`7c505a882f3a20ed4973cc1b6f2d51c205a22466`，已推送并核对
+`origin/main` 与该提交一致。未创建 PR 或 GitHub Release；`0.6.5` 仍未发布，未进入 Stage 02。

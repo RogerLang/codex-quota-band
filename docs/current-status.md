@@ -4,8 +4,9 @@
 
 ## Fork Foundation 01
 
-当前工作区已完成 fork 后第一轮基础架构迁移，产品版本暂保持 `0.6.5`。Foundation 01 已获用户
-验收并获准提交、推送至 `origin/main`；没有创建 PR 或 GitHub Release，仍不是正式发布版本。
+Foundation 01 **COMPLETE / accepted**；fork 后第一轮基础架构迁移已由用户验收。正式提交为
+`7c505a882f3a20ed4973cc1b6f2d51c205a22466`，已推送至 `origin/main`。产品版本暂保持
+`0.6.5`；没有创建 PR 或 GitHub Release，仍不是正式发布版本。
 
 目标设备改为 **Xiaomi Smart Band 9 Pro**，状态只能写“目标设备 / 适配中”。Foundation 不实现
 Lua 真表盘、AOD、Vela → Lua 文件 IPC 或 Band 9 Pro 336×480 UI，也没有完成 Band 9 Pro 真机验收。
@@ -40,25 +41,40 @@ runtime。旧 6 位配对没有被映射成公网协议；二维码是 Foundatio
   Gadgetbridge、root 或 LSPosed。
 - Android 不新增常驻前台服务，也不承诺系统杀进程后的提醒必达。
 
-## 已完成自动验证
+## 已完成验证
 
 - Windows `cargo test --workspace` 全部通过，包含 relay protocol/runtime 与既有 legacy 回归测试。
 - Android `:app:testDebugUnitTest :app:lintDebug :app:lintValidation :app:assembleDebug
   :app:assembleValidation` 全部通过；129 个 JVM 单测通过，Debug 和独立 Validation APK 均已组装。
-- Foundation 01V 独立 Android 验证 APK 的 7 项检查由用户在手机上确认全部 PASS；这是 Android 自发
-  synthetic data 到 ntfy 再由 Android 正式 subscriber 恢复的验收，不等于正式 Windows/Android 联动。
-- Foundation 01R 将无 cursor 的 latest 恢复与持久 cursor 恢复拆成 2 项；新版 8 项 APK 已构建，尚未
-  在用户手机上复测，因此不记录 8/8 真机 PASS。
+- 原版 Foundation 01V 独立 Android 验证 APK 曾由用户确认 7/7 PASS。Foundation 01R 将无 cursor 的
+  latest 恢复与持久 cursor 恢复拆成两项；用户已在 Android 真机确认最终版 **8/8 PASS**。测试仅使用
+  synthetic data，由验证 App 发往随机 ntfy topic，再由 Android 正式 subscriber 接收，不等于正式
+  Windows → Android 联动验收。
 - 根目录 Node 契约/历史回归测试 44/44 通过；保留的 Band 10 legacy RPK 工程构建成功，36/36
   built tests 通过。该构建只验证 package identity 与既有工程未损坏，不代表 Band 9 Pro 已适配。
+
+standalone APK 的 8 项按 `ValidationItem` 定义记录：
+
+| ValidationItem | 页面项目 | Android 真机结果 |
+| --- | --- | --- |
+| `Keystore` | 安全密钥存储 | PASS |
+| `Relay` | ntfy 实时接收 | PASS |
+| `Encryption` | 加密解密 | PASS |
+| `LatestRecovery` | 无 cursor 最新缓存恢复 | PASS |
+| `CursorRecovery` | 持久 cursor 断线恢复 | PASS |
+| `Tamper` | 篡改拒绝 | PASS |
+| `Replay` | 重复消息拒绝 | PASS |
+| `Rollback` | 旧消息拒绝 | PASS |
 
 ## 仍需真机或外部服务验证
 
 - Windows 公共 ntfy 随机虚构数据 smoke test 已通过；429/5xx/断网退避已由实现与 mock failure
   路径覆盖，但未对公共服务故障注入。
-- 正式 Windows → Android 联动、Android 网络切换、后台/锁屏重连和持久 cursor recovery 真机行为；
-  旧版 Foundation 01V 的 7/7 PASS 不覆盖这些场景。
-- CleanRoom SDK + Xiaomi backend 在真实小米运动健康与 Band 9 Pro 上的连接、权限、消息和提醒。
-- Band 9 Pro RPK/package/signature 匹配；本轮不做 Lua watchface 或 UI。
+- 正式 Windows → Android 联动，以及正式 App 在网络切换、后台/锁屏情况下的重连和持久 cursor
+  行为；standalone APK 的 8/8 PASS 不覆盖这些正式双端场景。
+- CleanRoom SDK（Xiaomi backend）→ 小米运动健康（Mi Fitness）→ Band 9 Pro 的真实连接、权限、
+  消息和提醒尚未验证。
+- Band 9 Pro RPK/package/signature 匹配；Band 9 Pro 尚未真机验证，Vela/Lua 真表盘、AOD 和 UI
+  尚未开始。
 
 在以上真机工作完成前，不得写“Band 9 Pro 已支持”。
