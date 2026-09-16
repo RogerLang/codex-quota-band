@@ -14,21 +14,30 @@ The Android validation APK sends one notification with:
 - title: `CQNOTIFY-47-A9F3`
 - body: `SEQ47-WEEK38-RUN2`
 
-The watchface scans only these candidate locations:
+The watchface checks only these candidate locations:
 
-- `/data/persist.db`
-- `/data/persist.db.bk`
-- regular files below `/data/app/notifications/`
+- the most recent 512 KiB tail of `/data/persist.db`;
+- the most recent 512 KiB tail of `/data/persist.db.bk`;
+- at most 16 regular files below `/data/app/notifications/`, reading at most 128 KiB from each.
 
 Public openVela/community evidence makes these paths reasonable candidates, but it does **not** establish
 that user-visible notification title/body text is stored there. Stage 03E exists specifically to test that
 boundary on the real Band 9 Pro.
 
-## Read-only behavior
+## Read-only and bounded-I/O behavior
 
 The probe opens candidate files in `rb` mode and searches for the two exact synthetic markers. Directory
 enumeration, when available, uses `find /data/app/notifications -type f` through `io.popen`; no shell
-command writes, removes, renames, or changes permissions on any system path.
+command writes, removes, renames, truncates, or changes permissions on any system path.
+
+To avoid sustained I/O on the wearable, the probe:
+
+- scans once immediately, then at most once every 15 seconds;
+- stops after 12 scans (about 3 minutes) unless both markers are found earlier;
+- stops immediately after `FOUND BOTH`;
+- never reads an entire large database by default; only the bounded tail window is inspected.
+
+If the scan window ends, reselecting the watchface restarts the probe window.
 
 The screen reports:
 
@@ -38,11 +47,12 @@ The screen reports:
 - `NOT FOUND` + `sources unreadable`: the probe could not read the fixed database files or any enumerated
   notification file;
 - `DIR_ENUM_UNAVAILABLE`: this firmware/runtime did not expose `io.popen` directory enumeration. The fixed
-  database checks still run.
+  database checks still run;
+- `SCAN STOPPED`: the bounded probe window ended; reselect the face only if another run is needed.
 
 `FOUND BOTH` is positive evidence for a system-storage bridge candidate. `NOT FOUND` only rules out the
-candidate paths and representation checked by this probe; it does not prove that notifications are never
-persisted elsewhere or are not encoded/transformed.
+candidate paths, bounded windows, and representation checked by this probe; it does not prove that
+notifications are never persisted elsewhere or are not encoded/transformed.
 
 ## Build
 
