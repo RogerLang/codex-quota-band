@@ -1,19 +1,13 @@
 # Stage 03E NotifyApi -> system-storage -> Lua probe
 
 Date prepared: 2026-09-16.
-Status: **real-device notification delivery PASS; bounded persist-db marker scan NEGATIVE; notification-directory branch not yet tested because `io.popen` enumeration is unavailable.**
+Status: **real-device notification delivery PASS; bounded persist-db marker scan NEGATIVE; notification-directory branch moved to Stage 03F.**
 
 ## Why this stage exists
 
-Stage 03A proved the warm-background bridge on the target Xiaomi Smart Band 9 Pro:
+Stage 03A proved that a true Lua watchface on the target Band 9 Pro can read persisted Quick App data from `/data/quickapp/files/<app_id>/`, but it also showed that `MessageApi` does not update an inactive/non-foreground RPK. Stage 03B proved that `NodeApi.launchWearApp()` can explicitly wake the RPK and persist new state, but this visibly takes over the band UI.
 
-```text
-Android -> XMS / Mi Fitness -> non-foreground validation RPK
--> internal://files -> /data/quickapp/files/<app_id>/...
--> Lua true watchface
-```
-
-Stage 03E tested whether the already-proven Xiaomi `NotifyApi` path could avoid waking a Quick App:
+Stage 03E therefore tested whether the already-proven Xiaomi `NotifyApi` path could avoid waking a Quick App entirely:
 
 ```text
 Android validation APK
@@ -50,7 +44,7 @@ Body:  SEQ47-WEEK38-RUN2
 
 Therefore Android -> XMS / Mi Fitness -> Band 9 Pro system notification delivery is **PASS**. As in Stage 02D, `REQUESTED_CALLBACK_TIMEOUT` is an API callback observation and does not mean delivery failed when the physical band receipt is confirmed.
 
-## Bounded storage probe result
+## Bounded persist-db result
 
 The hardened Stage 03E Lua watchface completed all 12 scans and reported:
 
@@ -63,16 +57,16 @@ DIR_ENUM_UNAVAILABLE
 sources readable
 ```
 
-The probe scanned only bounded read-only windows:
+The probe scanned bounded read-only windows of:
 
 ```text
-/data/persist.db                 -> last 512 KiB only
-/data/persist.db.bk              -> last 512 KiB only
+/data/persist.db
+/data/persist.db.bk
 ```
 
 Result: neither synthetic marker was visible in the tested persist-db windows after a notification that was independently confirmed delivered to the band.
 
-This is a **negative result for the bounded `/data/persist.db` / `.bk` clear-text hypothesis**. It is not evidence that notification text is never persisted elsewhere or that a database page outside the tested tail window could never contain it.
+This is a **negative result for the bounded `/data/persist.db` / `.bk` clear-text hypothesis**. It is not evidence that notification text is never persisted elsewhere.
 
 ## Remaining notification-directory boundary
 
@@ -84,9 +78,7 @@ Band 9 Pro community filesystem evidence identifies at least:
 /data/app/notifications/noti_reply_sms.db
 ```
 
-and other Xiaomi/Vela tooling references notification icon-cache subdirectories. Community Lua code on Xiaomi wearables also uses `lvgl.fs.open_dir()` / directory handles, providing a safer alternative to shell enumeration.
-
-That narrow remaining branch is moved to Stage 03F. Stage 03F must remain read-only, bounded, and limited to `/data/app/notifications`; it must not resume broad `/data` scanning.
+and community Lua code on Xiaomi wearables uses `lvgl.fs.open_dir()` / directory handles. That narrow remaining branch moved to Stage 03F.
 
 ## Safety boundary retained
 
@@ -104,7 +96,7 @@ Stage 03E establishes:
 ```text
 NotifyApi delivery to Band 9 Pro          PASS
 persist.db/.bk bounded marker search      NEGATIVE
-/data/app/notifications enumeration       NOT TESTED
+/data/app/notifications enumeration       NOT TESTED IN 03E
 ```
 
-Stage 03E is therefore **not a positive bridge candidate by itself**. Stage 03F is the final narrow test for the notification-directory branch before deciding whether to drop the NotifyApi-to-watchface storage route.
+Stage 03E is therefore **not a positive bridge candidate by itself**. Stage 03F is the final narrow test for the notification-directory branch.
