@@ -64,8 +64,8 @@ internal fun Stage03ENotifyScreen(copyReport: (String) -> Unit) {
           Text("测试说明", fontSize = CodexTokens.Type.SectionTitle, fontWeight = FontWeight.SemiBold)
           Text(
             "① 保持 Stage 03E Lua 表盘。\n" +
-              "② 不打开任何 Probe RPK。\n" +
-              "③ 点击发送测试通知。\n" +
+              "② 手环需保留一个与 validation APK 包名/签名匹配的已验证 Probe RPK，但不要打开它。\n" +
+              "③ 点击发送测试通知；APK 会先检查 RPK，再依次处理 DEVICE_MANAGER 与 NOTIFY。\n" +
               "④ 手环收到通知后返回表盘，观察 MARKER 是否变为 FOUND。",
             modifier = Modifier.padding(top = CodexTokens.Space.Md),
             fontSize = CodexTokens.Type.Body,
@@ -78,7 +78,7 @@ internal fun Stage03ENotifyScreen(copyReport: (String) -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
           Text(
-            "若 XMS 只返回 1 个 connected node，即使名称不匹配 Band 9 Pro，也仅在本 validation probe 中使用 single-node fallback；不会把该规则带入正式 runtime。",
+            "matching RPK 仅是 XMS 授权前置条件；Stage 03E 不启动 RPK，也不通过 RPK 传输本次 marker。",
             modifier = Modifier.padding(top = CodexTokens.Space.Md),
             fontSize = CodexTokens.Type.Supporting,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -96,7 +96,7 @@ internal fun Stage03ENotifyScreen(copyReport: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(top = CodexTokens.Space.Xl),
             shape = RoundedCornerShape(CodexTokens.Radius.Button),
           ) {
-            Text(if (running) "正在发送…" else "发送测试通知")
+            Text(if (running) "正在检查并发送…" else "检查权限并发送测试通知")
           }
         }
       }
@@ -112,13 +112,15 @@ internal fun Stage03ENotifyScreen(copyReport: (String) -> Unit) {
             Text("Connected nodes: ${value.connectedNodeCount}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
             Text("Band 9 Pro name matches: ${value.band9ProMatchCount}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
             Text("Selection: ${value.nodeSelection}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
-            Text("NOTIFY permission: ${value.notifyPermission}", modifier = Modifier.padding(top = CodexTokens.Space.Md), fontSize = CodexTokens.Type.Body)
+            Text("Matching RPK installed: ${value.wearAppInstalled}", modifier = Modifier.padding(top = CodexTokens.Space.Md), fontSize = CodexTokens.Type.Body)
+            Text("DEVICE_MANAGER: ${value.deviceManagerPermission}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Body)
+            Text("NOTIFY: ${value.notifyPermission}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Body)
             Text("Notify request: ${value.notifyRequest}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Body)
             Text("Node attempt: ${value.nodeAttempt}", modifier = Modifier.padding(top = CodexTokens.Space.Sm), fontSize = CodexTokens.Type.Supporting)
           }
         }
         Text(
-          "REQUESTED_CALLBACK_TIMEOUT 不等于通知失败；最终以手环是否收到该 marker 通知为准。",
+          "RPK_REQUIRED 表示手环缺少匹配的 companion RPK；DENIED 表示授权未获批准。REQUESTED_CALLBACK_TIMEOUT 不等于通知失败。",
           modifier = Modifier.padding(top = CodexTokens.Space.Lg),
           fontSize = CodexTokens.Type.Supporting,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
