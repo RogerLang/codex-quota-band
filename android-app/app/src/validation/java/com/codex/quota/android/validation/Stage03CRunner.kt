@@ -31,7 +31,7 @@ internal data class Stage03CAutoReturnResult(
     }
 
   fun report(): String = buildString {
-    appendLine("CodexQuota Stage 03C")
+    appendLine("CodexQuota Stage 03D")
     appendLine("Sequence: $sequence")
     appendLine("LaunchWearApp: $launchResult")
     appendLine("Message: $messageResult")
@@ -39,7 +39,7 @@ internal data class Stage03CAutoReturnResult(
     appendLine("NodeAttempt: $nodeAttempt")
     appendLine("AutoReturn: USER_OBSERVATION")
     appendLine("VisibleFlash: USER_OBSERVATION")
-    appendLine("Watchface45: USER_OBSERVATION")
+    appendLine("Watchface46: USER_OBSERVATION")
     append("Overall: $overall")
   }
 }
@@ -53,7 +53,7 @@ internal class Stage03CRunner(context: Context) {
   private val authApi = apis[1] as com.xiaomi.xms.wearable.auth.AuthApi
   private val messageApi = apis[2] as com.xiaomi.xms.wearable.message.MessageApi
 
-  suspend fun wakeSendAndReturn(sequence: Int = 45): Stage03CAutoReturnResult {
+  suspend fun wakeSendAndReturn(sequence: Int = 46): Stage03CAutoReturnResult {
     require(sequence in 0..999_999)
     val query = retryStage02(
       query = { await(nodeApi.connectedNodes) },
@@ -97,6 +97,8 @@ internal class Stage03CRunner(context: Context) {
         return Stage03CAutoReturnResult(sequence, launch, "NOT_SENT", nodeAttempt = query.attempt)
       }
 
+      // Keep the same proven entry route as Stage 03B. The index page is a black relay in this
+      // validation build, so the only new variable is app termination after persistence.
       delay(INITIAL_WAKE_DELAY_MS)
       val nonce = Stage03AMessage.randomNonce()
       val payload = Stage03AMessage.encodeState(sequence, nonce)
@@ -162,11 +164,11 @@ internal class Stage03CRunner(context: Context) {
   }
 
   private companion object {
-    const val WEAR_ROUTE = "pages/relay"
+    const val WEAR_ROUTE = "pages/index"
     const val API_TIMEOUT_MS = 8_000L
-    const val INITIAL_WAKE_DELAY_MS = 250L
-    const val RETRY_DELAY_MS = 250L
-    const val ACK_SLICE_MS = 700L
-    const val MAX_SEND_ATTEMPTS = 8
+    const val INITIAL_WAKE_DELAY_MS = 700L
+    const val RETRY_DELAY_MS = 500L
+    const val ACK_SLICE_MS = 1_200L
+    const val MAX_SEND_ATTEMPTS = 6
   }
 }
