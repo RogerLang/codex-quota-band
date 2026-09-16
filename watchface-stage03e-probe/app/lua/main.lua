@@ -9,9 +9,11 @@ local FIXED_FILES = {
 }
 local NOTIFICATION_ROOT = "/data/app/notifications"
 local CHUNK_SIZE = 4096
-local MAX_DB_BYTES = 16 * 1024 * 1024
-local MAX_NOTIFICATION_FILE_BYTES = 2 * 1024 * 1024
-local MAX_NOTIFICATION_FILES = 64
+local MAX_DB_TAIL_BYTES = 512 * 1024
+local MAX_NOTIFICATION_FILE_BYTES = 128 * 1024
+local MAX_NOTIFICATION_FILES = 16
+local MAX_SCANS = 12
+local SCAN_PERIOD_MS = 15000
 local OVERLAP = math.max(#TITLE_MARKER, #BODY_MARKER) - 1
 
 local root = lvgl.Object(nil, {
@@ -39,7 +41,7 @@ local markerLabel = lvgl.Label(root, {
 })
 
 local detailLabel = lvgl.Label(root, {
-    x = 18, y = 214, w = 300, h = 74,
+    x = 18, y = 214, w = 300, h = 88,
     text = "waiting for scan",
     font_size = 18,
     text_color = '#8ea0a8',
@@ -47,7 +49,7 @@ local detailLabel = lvgl.Label(root, {
 })
 
 local sourceLabel = lvgl.Label(root, {
-    x = 18, y = 304, w = 300, h = 54,
+    x = 18, y = 312, w = 300, h = 48,
     text = "SRC --",
     font_size = 16,
     text_color = '#66747a',
@@ -56,17 +58,29 @@ local sourceLabel = lvgl.Label(root, {
 
 lvgl.Label(root, {
     x = 18, y = 386, w = 300, h = 58,
-    text = "NotifyApi -> system storage\nread-only probe",
+    text = "NotifyApi -> system storage\nread-only limited probe",
     font_size = 17,
     text_color = '#66747a',
     bg_opa = 0,
 })
 
-local function scanFile(path, maxBytes)
+local function positionNearTail(file, maxBytes)
+    local ok, size = pcall(function() return file:seek("end") end)
+    if not ok or type(size) ~= "number" then
+        pcall(function() file:seek("set", 0) end)
+        return
+    end
+    local start = math.max(0, size - maxBytes)
+    pcall(function() file:seek("set", start) end)
+end
+
+local function scanFile(path, maxBytes, tailOnly)
     local file = io.open(path, "rb")
     if not file then
         return false, false, false, 0
     end
+
+    if tailOnly then positionNearTail(file, maxBytes) end
 
     local titleFound = false
     local bodyFound = false
@@ -125,7 +139,24 @@ local function shortPath(path)
     return "SRC readable system file"
 end
 
+local scanCount = 0
+local completed = false
+local lastOutcome = "NOT FOUND"
+
 local function refresh()
+    if completed then return end
+    if scanCount >= MAX_SCANS then
+        detailLabel:set {
+            text = "probe window ended\nreselect face to retry",
+            text_color = '#8ea0a8',
+        }
+        sourceLabel:set { text = "SCAN STOPPED", text_color = '#66747a' }
+        completed = true
+        return
+    end
+
+    scanCount = scanCount + 1
+
     local titleFound = false
     local bodyFound = false
     local titleSource = nil
@@ -134,7 +165,7 @@ local function refresh()
     local notificationReadable = 0
 
     for _, path in ipairs(FIXED_FILES) do
-        local readable, hasTitle, hasBody = scanFile(path, MAX_DB_BYTES)
+        local readable, hasTitle, hasBody = scanFile(path, MAX_DB_TAIL_BYTES, true)
         if readable then fixedReadable = fixedReadable + 1 end
         if hasTitle then
             titleFound = true
@@ -148,7 +179,7 @@ local function refresh()
 
     local notificationFiles, enumStatus = listNotificationFiles()
     for _, path in ipairs(notificationFiles) do
-        local readable, hasTitle, hasBody = scanFile(path, MAX_NOTIFICATION_FILE_BYTES)
+        local readable, hasTitle, hasBody = scanFile(path, MAX_NOTIFICATION_FILE_BYTES, false)
         if readable then notificationReadable = notificationReadable + 1 end
         if hasTitle then
             titleFound = true
@@ -161,26 +192,30 @@ local function refresh()
         if titleFound and bodyFound then break end
     end
 
-    local detail = "DB R " .. tostring(fixedReadable) .. "/2"
-        .. "  DIR R " .. tostring(notificationReadable)
-        .. "\n" .. enumStatus
+    local detail = "SCAN " .. tostring(scanCount) .. "/" .. tostring(MAX_SCANS)
+        .. "  DB R " .. tostring(fixedReadable) .. "/2"
+        .. "\nDIR R " .. tostring(notificationReadable) .. "  " .. enumStatus
 
     if titleFound and bodyFound then
-        markerLabel:set { text = "FOUND BOTH", text_color = '#5fd3b3' }
+        lastOutcome = "FOUND BOTH"
+        markerLabel:set { text = lastOutcome, text_color = '#5fd3b3' }
         detailLabel:set { text = detail .. "\nnotification text visible", text_color = '#5fd3b3' }
         sourceLabel:set { text = shortPath(titleSource or bodySource), text_color = '#8ea0a8' }
+        completed = true
         return
     end
 
     if titleFound or bodyFound then
-        markerLabel:set { text = "PARTIAL", text_color = '#ffb84d' }
+        lastOutcome = "PARTIAL"
+        markerLabel:set { text = lastOutcome, text_color = '#ffb84d' }
         local which = titleFound and "title marker only" or "body marker only"
         detailLabel:set { text = detail .. "\n" .. which, text_color = '#ffb84d' }
         sourceLabel:set { text = shortPath(titleSource or bodySource), text_color = '#8ea0a8' }
         return
     end
 
-    markerLabel:set { text = "NOT FOUND", text_color = '#9ca8ad' }
+    lastOutcome = "NOT FOUND"
+    markerLabel:set { text = lastOutcome, text_color = '#9ca8ad' }
     if fixedReadable > 0 or notificationReadable > 0 then
         detailLabel:set { text = detail .. "\nsources readable", text_color = '#ffb84d' }
     else
@@ -190,7 +225,7 @@ local function refresh()
 end
 
 local timer = lvgl.Timer({
-    period = 5000,
+    period = SCAN_PERIOD_MS,
     repeat_count = -1,
     cb = refresh,
 })
