@@ -3,15 +3,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-if (-not $OutputDir) { $OutputDir = Join-Path $repo 'out\stage03g' }
-$source = Join-Path $repo 'watchface-stage03g-probe'
-$temp = Join-Path $repo '.temp_stage03g_watchface'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+if (-not $OutputDir) { $OutputDir = Join-Path $repo 'out\stage03f' }
+$source = Join-Path $repo 'experiments\watchface\stage03f-notification-dir'
+$temp = Join-Path $repo '.temp_stage03f_watchface'
 $template = Join-Path $temp 'LuaDevTemplate'
 $work = Join-Path $temp 'work'
 $pinned = '0eb8346ce0c9c11f2316c6b154ed91fd4a0d419d'
-$faceId = '491552743'
-$faceName = 'CodexQuota-Stage03G-uorb-observer.face'
+$faceId = '491552741'
+$faceName = 'CodexQuota-Stage03F-notification-dir.face'
 
 if (Test-Path $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
 New-Item -ItemType Directory -Path $temp,$work,$OutputDir -Force | Out-Null
@@ -38,8 +38,8 @@ try {
   $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(114,214,166))
   try {
     $graphics.DrawString('CodexQuota', $fontTitle, $white, 48, 86)
-    $graphics.DrawString('Stage 03G', $fontBody, $green, 76, 129)
-    $graphics.DrawString('uORB event observer', $fontBody, $white, 43, 171)
+    $graphics.DrawString('Stage 03F', $fontBody, $green, 76, 129)
+    $graphics.DrawString('Notification dir probe', $fontBody, $white, 36, 171)
   } finally {
     $fontTitle.Dispose(); $fontBody.Dispose(); $white.Dispose(); $green.Dispose()
   }
@@ -48,8 +48,8 @@ try {
   $graphics.Dispose(); $bitmap.Dispose()
 }
 
-$fprj = Join-Path $work 'stage03g_uorb_event_observer.fprj'
-$xml = Get-Content -LiteralPath (Join-Path $source 'stage03g_uorb_event_observer.fprj') -Raw -Encoding UTF8
+$fprj = Join-Path $work 'stage03f_notification_dir_probe.fprj'
+$xml = Get-Content -LiteralPath (Join-Path $source 'stage03f_notification_dir_probe.fprj') -Raw -Encoding UTF8
 $xml = $xml -replace 'encoding="utf-8"', 'encoding="utf-16"'
 [System.IO.File]::WriteAllText($fprj, $xml, [System.Text.Encoding]::Unicode)
 
@@ -73,7 +73,7 @@ $knownPostSuccessClrExit = -532462766
 if ($compilerExit -ne 0) {
   $postSuccessCrash = $compilerExit -eq $knownPostSuccessClrExit -and (Test-Path $face) -and $reportedReady -and $reportedNoErrors
   if ($postSuccessCrash) {
-    Write-Warning "Compiler.exe reported success then exited with known post-success CLR code $compilerExit; accepting artifact for Stage 03G validation."
+    Write-Warning "Compiler.exe reported success then exited with known post-success CLR code $compilerExit; accepting artifact for Stage 03F validation."
   } else {
     throw "Watchface compiler failed with exit code $compilerExit."
   }

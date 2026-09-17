@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$signDir = Join-Path $repo 'band-probe\sign\release'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+$signDir = Join-Path $repo 'experiments\band\base-probe\sign\release'
 $store = Join-Path $repo 'android-app\stage02-validation.p12'
 $propertiesPath = Join-Path $repo 'android-app\local.properties'
 $openssl = 'C:\Program Files\Git\usr\bin\openssl.exe'

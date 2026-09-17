@@ -8,7 +8,7 @@ const root = path.resolve(import.meta.dirname, '..')
 const read = (p) => readFileSync(path.join(root, p), 'utf8')
 
 test('probe and validation APK use the same isolated application identity', () => {
-  const manifest = JSON.parse(read('band-probe/src/manifest.json'))
+  const manifest = JSON.parse(read('experiments/band/base-probe/src/manifest.json'))
   const gradle = read('android-app/app/build.gradle.kts')
   assert.equal(manifest.package, 'io.github.rogerlang.codexquota.validation')
   assert.equal(manifest.config.designWidth, 336)
@@ -27,8 +27,8 @@ test('all local signing material is gitignored', () => {
   for (const file of [
     'android-app/local.properties',
     'android-app/stage02-validation.p12',
-    'band-probe/sign/release/private.pem',
-    'band-probe/sign/release/certificate.pem',
+    'experiments/band/base-probe/sign/release/private.pem',
+    'experiments/band/base-probe/sign/release/certificate.pem',
   ]) {
     const ignored = execFileSync('git', ['check-ignore', file], { cwd: root, encoding: 'utf8' }).trim()
     assert.equal(ignored.replaceAll('\\', '/'), file)

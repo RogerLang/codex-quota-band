@@ -38,7 +38,7 @@ Root entry/file counts are diagnostic only and intentionally do not reveal file 
 ## Build
 
 ```powershell
-.\watchface-stage03f-probe\build.ps1
+.\experiments\watchface\stage03f-notification-dir\build.ps1
 ```
 
 Expected artifact:

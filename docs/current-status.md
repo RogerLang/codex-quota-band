@@ -1,6 +1,23 @@
 # CodexQuota 当前状态
 
-更新时间：2026-09-16。
+更新时间：2026-09-17。
+
+## 当前状态摘要
+
+| 项目 | 状态 |
+| --- | --- |
+| Safe baseline | `main` / Stage 02D；保留已验证的通信基线，不移动或合并 |
+| Experimental history | Stage 03A → 03G；均为实验，不是正式产品功能 |
+| Latest experiment | Stage 03G uORB event observer |
+| Stage 03G result | `REAL_DEVICE_FAILURE` |
+| Stage 03G status | `QUARANTINED / DO_NOT_REDEPLOY` |
+| Physical-device watchface development | `PAUSED`，等待设备恢复状态确认 |
+| Next development policy | simulator-first，真机部署前审查退出、回滚和恢复路径 |
+
+Stage 03G 真机表盘进入后 UI 完全卡死，强制重启后自动再次进入并卡死；小米运动健康无法连接。
+详见[事故记录](incidents/2026-09-17-stage03g-watchface-freeze.md)及
+[表盘开发安全规则](safety/watchface-development-safety.md)。Lua 真表盘实验已推进至 Stage 03G，
+但尚无获验收的正式产品表盘。当前不得向真实 Band 9 Pro 再次下发 Stage 03G。
 
 ## Fork Foundation 01
 
@@ -8,8 +25,9 @@ Foundation 01 **COMPLETE / accepted**；fork 后第一轮基础架构迁移已�
 `7c505a882f3a20ed4973cc1b6f2d51c205a22466`，已推送至 `origin/main`。产品版本暂保持
 `0.6.5`；没有创建 PR 或 GitHub Release，仍不是正式发布版本。
 
-目标设备改为 **Xiaomi Smart Band 9 Pro**，状态只能写“目标设备 / 适配中”。Foundation 不实现
+目标设备改为 **Xiaomi Smart Band 9 Pro**，状态只能写“目标设备 / 适配中”。Foundation 01 当时未实现
 Lua 真表盘、AOD、Vela → Lua 文件 IPC 或 Band 9 Pro 336×480 UI，也没有完成 Band 9 Pro 真机验收。
+后续 Stage 03A–03G 已实现多个 Lua 实验探针；没有获验收的正式产品表盘。
 
 ## Stage 02D communication probe
 
@@ -22,7 +40,7 @@ Android → Band 与 Band → Android 消息均通过；更新 Probe 后手环�
 `NotificationApi: TIMEOUT` 仅表示 validation APK 的本地 8 秒 Task 等待没有得到完成结果，
 不表示通知失败；回调的后续状态未知。现阶段将其保留为技术观察项，不单独追查、不自动重发，
 也不改正式 `XiaomiWearableBridge` 或 vendored SDK。详细证据见
-[`stage_02_xms_probe_review.md`](stage_02_xms_probe_review.md)。
+[`stage_02_xms_probe_review.md`](stages/stage02/stage_02_xms_probe_review.md)。
 
 Stage 02D **不是正式产品包验收**。正式 `io.github.rogerlang.codexquota` APK/RPK identity、
 额度/任务数据、Windows → ntfy → Android → Band 端到端链路、后台/锁屏/网络切换、真表盘、
@@ -92,6 +110,7 @@ standalone APK 的 8 项按 `ValidationItem` 定义记录：
 - 正式 Windows → Android 联动，以及正式 App 在网络切换、后台/锁屏情况下的重连和持久 cursor
   行为；standalone APK 的 8/8 PASS 不覆盖这些正式双端场景。
 - 正式 Android runtime → 小米运动健康 → Band 9 Pro 的真实额度/任务同步、提醒、后台与重连仍需
-  真机验收。正式 Band 9 Pro RPK、Vela/Lua 真表盘、AOD 和产品 UI 尚未实现。
+  真机验收。正式 Band 9 Pro RPK、产品级 Vela/Lua 真表盘、AOD 和产品 UI 尚未实现；
+  Stage 03A–03G 的 Lua 真表盘实验不构成正式产品验收。
 
 在以上真机工作完成前，不得写“Band 9 Pro 已支持”。

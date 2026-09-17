@@ -1,7 +1,28 @@
 # Stage 03G uORB event observer
 
 Date prepared: 2026-09-17.
-Status: **prepared for build and real-device validation; no device result yet**.
+Status: **REAL_DEVICE_FAILURE / QUARANTINED / DO_NOT_REDEPLOY**.
+Real-device result date: 2026-09-17.
+
+> **Do not reinstall or redeploy this probe to a physical Band 9 Pro
+> without explicit owner authorization after a separate safety review.**
+> The design and procedure below are retained as historical evidence, not as current instructions.
+> See the [incident record](../../incidents/2026-09-17-stage03g-watchface-freeze.md)
+> and [watchface safety rules](../../safety/watchface-development-safety.md).
+
+## Real-device result
+
+The Stage 03G Lua watchface was installed and selected on a Xiaomi Smart Band 9 Pro. After the
+face opened, the device UI froze completely and touch input did not work normally. After a
+forced restart, the device automatically entered Stage 03G and froze again. Mi Fitness could
+not connect to the band and did not briefly show a connected state during forced restart.
+Normal Bluetooth removal or switching of the face is currently unavailable. The owner has
+contacted Xiaomi after-sales support; device recovery remains unconfirmed.
+
+The observation does not identify which, if any, `topic.subscribe()` call, Lua lifecycle
+behavior, or other component caused the freeze. It does not establish a firmware brick or
+hardware damage. The Stage 03G source is retained for later forensic review. Its quarantine
+must remain in force until the owner explicitly lifts it.
 
 ## Why Stage 03G exists
 

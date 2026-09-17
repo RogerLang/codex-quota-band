@@ -1,5 +1,11 @@
 # Stage 03G uORB event observer
 
+> **QUARANTINED / DO_NOT_REDEPLOY — REAL_DEVICE_FAILURE (2026-09-17).**
+> Do not reinstall or redeploy this probe to a physical Band 9 Pro without explicit
+> owner authorization after a separate safety review. The procedure below is retained
+> only as historical evidence. See the
+> [incident](../../../docs/incidents/2026-09-17-stage03g-watchface-freeze.md).
+
 This is a Band 9 Pro true-watchface validation probe. It asks one narrow question:
 
 > After Android sends the already-validated synthetic `NotifyApi` marker, does the Band system publish any corresponding event onto a Lua-visible uORB topic?

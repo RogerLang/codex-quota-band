@@ -3,15 +3,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-if (-not $OutputDir) { $OutputDir = Join-Path $repo 'out\stage03f' }
-$source = Join-Path $repo 'watchface-stage03f-probe'
-$temp = Join-Path $repo '.temp_stage03f_watchface'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+if (-not $OutputDir) { $OutputDir = Join-Path $repo 'out\stage03a' }
+$source = Join-Path $repo 'experiments\watchface\base-probe'
+$temp = Join-Path $repo '.temp_stage03a_watchface'
 $template = Join-Path $temp 'LuaDevTemplate'
 $work = Join-Path $temp 'work'
 $pinned = '0eb8346ce0c9c11f2316c6b154ed91fd4a0d419d'
-$faceId = '491552741'
-$faceName = 'CodexQuota-Stage03F-notification-dir.face'
+$faceId = '491552739'
+$faceName = 'CodexQuota-Stage03A-watchface.face'
 
 if (Test-Path $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
 New-Item -ItemType Directory -Path $temp,$work,$OutputDir -Force | Out-Null
@@ -26,6 +26,9 @@ if ($actual -ne $pinned) { throw "Unexpected LuaDevTemplate revision: $actual" }
 New-Item -ItemType Directory -Path (Join-Path $work 'app\lua'),(Join-Path $work 'images') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $source 'app\lua\main.lua') -Destination (Join-Path $work 'app\lua\main.lua') -Force
 
+# The pinned Compiler.exe reports a 230x328 preview requirement for this
+# DeviceType 367 project. This image is package metadata only; the actual
+# Lua widget remains 336x480.
 $preview = Join-Path $work 'images\preview.png'
 Add-Type -AssemblyName System.Drawing
 $bitmap = New-Object System.Drawing.Bitmap 230,328
@@ -37,19 +40,24 @@ try {
   $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
   $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(114,214,166))
   try {
-    $graphics.DrawString('CodexQuota', $fontTitle, $white, 48, 86)
-    $graphics.DrawString('Stage 03F', $fontBody, $green, 76, 129)
-    $graphics.DrawString('Notification dir probe', $fontBody, $white, 36, 171)
+    $graphics.DrawString('CodexQuota', $fontTitle, $white, 48, 92)
+    $graphics.DrawString('Stage 03A Probe', $fontBody, $green, 49, 132)
+    $graphics.DrawString('SEQ 42 -> 43', $fontBody, $white, 61, 174)
   } finally {
-    $fontTitle.Dispose(); $fontBody.Dispose(); $white.Dispose(); $green.Dispose()
+    $fontTitle.Dispose()
+    $fontBody.Dispose()
+    $white.Dispose()
+    $green.Dispose()
   }
   $bitmap.Save($preview, [System.Drawing.Imaging.ImageFormat]::Png)
 } finally {
-  $graphics.Dispose(); $bitmap.Dispose()
+  $graphics.Dispose()
+  $bitmap.Dispose()
 }
 
-$fprj = Join-Path $work 'stage03f_notification_dir_probe.fprj'
-$xml = Get-Content -LiteralPath (Join-Path $source 'stage03f_notification_dir_probe.fprj') -Raw -Encoding UTF8
+# EasyFace-compatible projects in the community examples are UTF-16LE XML.
+$fprj = Join-Path $work 'Stage03AProbe.fprj'
+$xml = Get-Content -LiteralPath (Join-Path $source 'Stage03AProbe.fprj') -Raw -Encoding UTF8
 $xml = $xml -replace 'encoding="utf-8"', 'encoding="utf-16"'
 [System.IO.File]::WriteAllText($fprj, $xml, [System.Text.Encoding]::Unicode)
 
@@ -69,11 +77,16 @@ $face = Join-Path $OutputDir $faceName
 $compilerText = $compilerStdout + "`n" + $compilerStderr
 $reportedReady = $compilerText -match 'Watchface:\s+.+\bis ready\b'
 $reportedNoErrors = $compilerText -match '\bNo Errors\b'
-$knownPostSuccessClrExit = -532462766
+$knownPostSuccessClrExit = -532462766 # 0xE0434352, generic unhandled .NET exception.
+
 if ($compilerExit -ne 0) {
-  $postSuccessCrash = $compilerExit -eq $knownPostSuccessClrExit -and (Test-Path $face) -and $reportedReady -and $reportedNoErrors
+  $postSuccessCrash =
+    $compilerExit -eq $knownPostSuccessClrExit -and
+    (Test-Path $face) -and
+    $reportedReady -and
+    $reportedNoErrors
   if ($postSuccessCrash) {
-    Write-Warning "Compiler.exe reported success then exited with known post-success CLR code $compilerExit; accepting artifact for Stage 03F validation."
+    Write-Warning "Compiler.exe produced the watchface and reported success, then exited with known post-success CLR code $compilerExit; accepting artifact for Stage 03A probe validation."
   } else {
     throw "Watchface compiler failed with exit code $compilerExit."
   }

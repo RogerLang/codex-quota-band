@@ -3,9 +3,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if (-not $OutputDir) { $OutputDir = Join-Path $repo 'out\stage03e' }
-$source = Join-Path $repo 'watchface-stage03e-probe'
+$source = Join-Path $repo 'experiments\watchface\stage03e-notify-storage'
 $temp = Join-Path $repo '.temp_stage03e_watchface'
 $template = Join-Path $temp 'LuaDevTemplate'
 $work = Join-Path $temp 'work'

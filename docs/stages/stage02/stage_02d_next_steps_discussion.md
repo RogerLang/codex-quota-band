@@ -2,8 +2,8 @@
 
 > 本文保留 Stage 02D 结束时的讨论快照。用户随后已决定下一主线是正式 Band 9 Pro 适配，
 > `NotifyApi` 8 秒回执超时暂列观察项；真表盘方向已写入
-> [`band_9_pro_watchface_design.md`](band_9_pro_watchface_design.md)。当前状态以
-> [`current-status.md`](current-status.md) 为准。
+> [`band_9_pro_watchface_design.md`](../../band_9_pro_watchface_design.md)。当前状态以
+> [`current-status.md`](../../current-status.md) 为准。
 
 日期：2026-09-16。仓库：`D:\github_repo\codex-quota-band`。讨论时 `HEAD` 与本地 `origin/main` 均为 `cafbb9679f4a7545312e16c9d8d3392ffe03900b`；当时 Stage 02/02D 的工作仍在未提交的 working tree 中。本文件供与 ChatGPT 讨论下一步范围，**不是发布或正式验收声明**。
 
@@ -40,9 +40,9 @@ Overall: PASS_WITH_NOTIFY_API_WARNING
 
 ## `NotificationApi: TIMEOUT` 的准确含义
 
-[Stage02DRunner.kt](../android-app/app/src/validation/java/com/codex/quota/android/validation/Stage02DRunner.kt) 的 Task 等待使用本地 `withTimeout(8000)`。[NotifyApi.java](../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/com/xiaomi/xms/wearable/notify/NotifyApi.java) 只有在 Binder 回调报告成功时才完成 Task；非成功状态经异常路径返回。此次 `TIMEOUT` 是 validation 层等满 8 秒，没有拿到 Task 完成结果。**它不表示通知未送达，也不能证明回调最终会或不会到达。**
+[Stage02DRunner.kt](../../../android-app/app/src/validation/java/com/codex/quota/android/validation/Stage02DRunner.kt) 的 Task 等待使用本地 `withTimeout(8000)`。[NotifyApi.java](../../../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/com/xiaomi/xms/wearable/notify/NotifyApi.java) 只有在 Binder 回调报告成功时才完成 Task；非成功状态经异常路径返回。此次 `TIMEOUT` 是 validation 层等满 8 秒，没有拿到 Task 完成结果。**它不表示通知未送达，也不能证明回调最终会或不会到达。**
 
-[正式 XiaomiWearableBridge.kt](../android-app/app/src/main/java/com/codex/quota/android/runtime/XiaomiWearableBridge.kt) 当前调用 `sendNotify()` 后即返回“已请求”，不等待 Task，因此不会产生同一个 validation 8 秒等待结果。这也意味着现有 `sendTaskAlert()` 返回值只表示请求已发起，**不能单独当作手环实际收到的证据**。正式任务提醒的真实效果还未测。
+[正式 XiaomiWearableBridge.kt](../../../android-app/app/src/main/java/com/codex/quota/android/runtime/XiaomiWearableBridge.kt) 当前调用 `sendNotify()` 后即返回“已请求”，不等待 Task，因此不会产生同一个 validation 8 秒等待结果。这也意味着现有 `sendTaskAlert()` 返回值只表示请求已发起，**不能单独当作手环实际收到的证据**。正式任务提醒的真实效果还未测。
 
 目前没有证据证明延长 8 秒阈值可得到成功回执，也不应为了消除警告自动重发通知，避免重复提醒。若后续要定位回执时序，可只在 validation 层对**同一次** synthetic 通知被动观察 Task 在 8 秒后是否完成，记录固定脱敏状态，不改 CleanRoom 或正式 runtime。
 
@@ -93,4 +93,4 @@ APK/RPK validation 签名证书 SHA-256 相同：`fd6239d22597887c5e64c669ecbcb9
 4. 如何安排 synthetic smoke test 与后续三端真机验收，既能定位故障层级，又避免扩大敏感数据收集和长时间设备测试？
 5. 在未收到用户“验收通过”前，应保留哪些未提交工作和本地候选产物，哪些旧 Stage 02 诊断代码可延后清理？
 
-相关事实文件：[当前状态](current-status.md)、[Stage 02 审阅记录](stage_02_xms_probe_review.md)、[产品决策](../CONTEXT.md)、[项目执行规则](../AGENTS.md)。
+相关事实文件：[当前状态](../../current-status.md)、[Stage 02 审阅记录](stage_02_xms_probe_review.md)、[产品决策](../../../CONTEXT.md)、[项目执行规则](../../../AGENTS.md)。

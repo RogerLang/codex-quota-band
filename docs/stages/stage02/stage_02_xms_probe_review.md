@@ -3,13 +3,13 @@
 > 本文按时间保留构建与真机诊断过程；中间章节的“未通过”“未提交”是当时状态。
 > 最终真机结论见文末“更新 Probe 复测结论”：**Stage 02D communication probe 为
 > `PASS_WITH_NOTIFY_API_WARNING`**，通知实际到达并振动，`NotifyApi` 回执超时保留为观察项。
-> 正式产品链路仍未验收，当前摘要以 [`current-status.md`](current-status.md) 为准。
+> 正式产品链路仍未验收，当前摘要以 [`current-status.md`](../../current-status.md) 为准。
 
 日期：2026-09-16。基线：`cafbb9679f4a7545312e16c9d8d3392ffe03900b`，开始时工作区干净且与 `origin/main` 一致。
 
 ## 目的与范围
 
-只验证 Android validation APK → CleanRoom XMS SDK（强制 `WearableBackend.XIAOMI`）→ 小米运动健康 → Xiaomi Smart Band 9 Pro。独立 `band-probe/` 工程以 336×480 画布提供通信状态；不含 quota 页面、Lua、后台接收或正式 runtime 协议修改。
+只验证 Android validation APK → CleanRoom XMS SDK（强制 `WearableBackend.XIAOMI`）→ 小米运动健康 → Xiaomi Smart Band 9 Pro。独立 `experiments/band/base-probe/` 工程以 336×480 画布提供通信状态；不含 quota 页面、Lua、后台接收或正式 runtime 协议修改。
 
 APK 引导检查 XMS service、目标 node、RPK 安装、`DEVICE_MANAGER` 和 `NOTIFY` 授权。用户在手环打开 Probe 后，四种 validation-only 消息完成带随机 nonce 的双向握手和最终回执，8 秒内未收到预期消息则失败。NotifyApi 只发送固定 synthetic 文案；API 成功后仍需用户确认通知及振动，文字到达但无振动记录 `NOTIFY_RECEIVED_NO_VIBRATION`。脱敏报告仅含固定项目状态和错误代码。
 
@@ -24,7 +24,7 @@ APK application ID 和 RPK package 均为 `io.github.rogerlang.codexquota.valida
 
 ## 本地签名
 
-`band-probe/scripts/prepare-validation-signing.ps1` 在本机生成一次性独立的 Stage 02 validation identity：Android 使用忽略的 PKCS12 文件及 `android-app/local.properties` 配置，RPK 使用同一 identity 的 PEM 私钥与证书。两份私钥材料及构建产物均被 Git 忽略，不提交或上传。
+`experiments/band/base-probe/scripts/prepare-validation-signing.ps1` 在本机生成一次性独立的 Stage 02 validation identity：Android 使用忽略的 PKCS12 文件及 `android-app/local.properties` 配置，RPK 使用同一 identity 的 PEM 私钥与证书。两份私钥材料及构建产物均被 Git 忽略，不提交或上传。
 
 `apksigner verify --print-certs` 验证 APK；built RPK 测试验证签名块内嵌对应证书。证书 SHA-256 为 `fd6239d22597887c5e64c669ecbcb93fe1127d9a8718fe0e7de179be4d2760e9`。**APK/RPK signing identity: MATCH**。此处只记录公开证书指纹，不记录私钥或口令。
 
@@ -32,7 +32,7 @@ APK application ID 和 RPK package 均为 `io.github.rogerlang.codexquota.valida
 
 - Android `:app:testValidationUnitTest :app:lintValidation :app:assembleValidation`：134/134 JVM tests 通过、Lint 通过、APK 构建通过。
 - Android `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug`：129/129 JVM tests 通过、Lint 通过、正式 source set 的 debug APK 构建通过。
-- `band-probe`：3/3 消息协议测试、RPK release 构建、1/1 built artifact 测试通过。
+- `experiments/band/base-probe`：3/3 消息协议测试、RPK release 构建、1/1 built artifact 测试通过。
 - 根目录 `npm test`：47/47 通过。检查 package identity、validation 代码不在 production source set、签名文件被 Git 忽略。
 - 检查正式 debug APK 的 20 个 DEX 文件：`Stage02Runner`、`Stage02Message`、`ValidationActivity`、`stage02_ping` 标记均不存在。
 - `git diff --check` 通过。

@@ -59,7 +59,7 @@ notifications are never persisted elsewhere or are not encoded/transformed.
 Run from Windows PowerShell:
 
 ```powershell
-.\watchface-stage03e-probe\build.ps1
+.\experiments\watchface\stage03e-notify-storage\build.ps1
 ```
 
 The script pins `FangAiden/LuaDevTemplate` to commit

@@ -53,7 +53,8 @@ CodexQuota 是一个 Android + Windows + Xiaomi Smart Band 9 Pro（目标设备 
 | `windows-native/` | Windows 托盘、Hook、额度采集、relay pairing、AES-GCM、ntfy publisher | Rust 2024、Tokio、reqwest、Windows API |
 | `android-app/` | 手机看板、relay QR、ntfy WebSocket、解密/防重放、通知、手环桥接 | Kotlin、Compose、OkHttp、CleanRoom XMS SDK |
 | `third_party/xms_wearable_sdk_cleanroom/` | 固定 commit 的 MIT CleanRoom XMS 源码 | Java、Android AIDL |
-| `band-app/` | 上游 Band 10 legacy RPK；Band 9 Pro 尚未开始 UI/watchface 实现 | Vela/AIoT UX、JavaScript |
+| `band-app/` | 上游 Band 10 legacy RPK；Band 9 Pro 正式 UI/watchface 尚未实现 | Vela/AIoT UX、JavaScript |
+| `experiments/` | 一次性验证、Stage 03 watchface probe 和阶段实验代码；不直接视为正式产品源码 | Vela、Lua、PowerShell、测试 |
 | `contract/` | 配对、额度、任务、同步流 JSON 契约 | JSON Schema |
 | `docs/` | 架构、ADR、安全、构建和真机验收证据 | Markdown |
 | `src/`、`astrobox-plugin/` | 0.4.0 以前的 Electron/AstroBox 历史实现 | legacy，只作回溯，不进入新架构主流程 |
@@ -127,7 +128,19 @@ npm run build
 
 版本、产物 SHA-256 和最近验证结果以 `docs/build-verification.md` 为准；不要把截图里的实时额度当成测试固定值。
 
-## 7. 真机验收和发布规则
+## 7. Band 9 Pro watchface safety gate
+
+- 任何涉及真实手环表盘的工作，先读 `docs/safety/watchface-development-safety.md` 和
+  `docs/incidents/2026-09-17-stage03g-watchface-freeze.md`。
+- Stage 03G = **QUARANTINED / DO_NOT_REDEPLOY**；任何 Agent 都不能自行解除。代码只保留供
+  后续 forensic review，未经 owner 明确解除和独立安全审查，不得再次向真实 Band 9 Pro 下发。
+- 涉及 uORB、system topic、生命周期或自动加载行为的 probe 默认 **HIGH-RISK**，必须单独安全审查。
+- 先在 Band 9 Pro 模拟器验证；编译成功不等于真机候选资格。真机前必须确认退出、切回已知可用
+  表盘、卸载候选表盘以及重启后是否自动加载的恢复路径。
+- 只有完成安全门并得到 owner 明确批准，才能安装真机候选。当前 Band 9 Pro 设备恢复前禁止
+  新的真实设备 watchface 实验。
+
+## 8. 真机验收和发布规则
 
 - 自动测试不能代替 Windows、Android、手环三端真机验收。
 - 重点验收：relay 二维码配对、Hook 事件和任务标题、ntfy cursor/replay、失焦通知、锁屏/后台与网络切换、手环提醒、离线缓存、重连和任务本机移除。
@@ -136,7 +149,7 @@ npm run build
 - Foundation 01 不构建或交付 Band 9 Pro RPK/watchface。后续真机候选的安装方式由对应阶段另行确认。
 - 其他手环型号在没有对应真机验收前只能标注为“实验性适配”或“模拟器预览”，不得写成已支持。外部测试反馈只收集型号、应用版本、可复现步骤、可见状态和脱敏截图，不收集设备标识、账号信息或完整日志。
 
-## 8. 处理不确定性
+## 9. 处理不确定性
 
 - 不要根据旧对话猜测新的产品语义；如果会改变用户体验、数据边界、协议或日常连接方式，先询问。
 - 不要删除、重置或覆盖混合工作区中的文件。删除行为必须有明确范围和可恢复性说明。

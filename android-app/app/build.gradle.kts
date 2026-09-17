@@ -125,7 +125,7 @@ if (
     }
 ) {
   throw GradleException(
-    "Stage 02 validation signing is required. Run band-probe/scripts/prepare-validation-signing.ps1 locally.",
+    "Stage 02 validation signing is required. Run experiments/band/base-probe/scripts/prepare-validation-signing.ps1 locally.",
   )
 }
 

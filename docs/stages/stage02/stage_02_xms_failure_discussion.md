@@ -2,7 +2,7 @@
 
 > 历史诊断记录：本文只描述早期失败。随后 Stage 02D 真机探针已达到
 > `PASS_WITH_NOTIFY_API_WARNING`，基础通信、通知到达及振动均通过；
-> 最新结论见 [`current-status.md`](current-status.md) 和
+> 最新结论见 [`current-status.md`](../../current-status.md) 和
 > [`stage_02_xms_probe_review.md`](stage_02_xms_probe_review.md)。
 
 日期：2026-09-16。目标设备：Xiaomi Smart Band 9 Pro。仓库基线 HEAD：`cafbb9679f4a7545312e16c9d8d3392ffe03900b`。
@@ -27,7 +27,7 @@ Overall: FAIL
 
 **当前结论：**第二次 `getConnectedNodes()` 已成功返回名称匹配 Band 9 Pro 的 node，因此第一次的 `XMS_SERVICE_UNAVAILABLE` 不能再当作 service 恒久不可用或设备不兼容的证据。失败现在位于 `isWearAppInstalled(node.id)`：它抛出了异常，而非正常返回 `false`，所以 `WEAR_APP_CHECK_FAILED` 不等于“RPK 未安装”。Probe 已能在手环打开。权限、双向消息与通知仍未执行，对它们没有结论。
 
-源码中的 [Stage02Runner.kt](../android-app/app/src/validation/java/com/codex/quota/android/validation/Stage02Runner.kt) 把该调用的任意异常合并成 `WEAR_APP_CHECK_FAILED`，还包括本地 8 秒超时。[NodeApi.java](../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/com/xiaomi/xms/wearable/node/NodeApi.java) 明确区分 `onWearAppInstalled(boolean)` 正常结果与 `onFailure(Status)`；后者经 [ExceptionUtil.java](../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/com/xiaomi/xms/wearable/exception/ExceptionUtil.java) 可转为断连、权限拒绝、包未安装或签名校验失败异常，其他状态可能成为一般异常。当前报告无法再细分。
+源码中的 [Stage02Runner.kt](../../../android-app/app/src/validation/java/com/codex/quota/android/validation/Stage02Runner.kt) 把该调用的任意异常合并成 `WEAR_APP_CHECK_FAILED`，还包括本地 8 秒超时。[NodeApi.java](../../../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/com/xiaomi/xms/wearable/node/NodeApi.java) 明确区分 `onWearAppInstalled(boolean)` 正常结果与 `onFailure(Status)`；后者经 [ExceptionUtil.java](../../../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/com/xiaomi/xms/wearable/exception/ExceptionUtil.java) 可转为断连、权限拒绝、包未安装或签名校验失败异常，其他状态可能成为一般异常。当前报告无法再细分。
 
 | 待区分的假设 | 目前证据 | 下一步最小证据 |
 | --- | --- | --- |
@@ -73,9 +73,9 @@ Overall: FAIL
 
 ## 源码证据与当前误判
 
-1. [Stage02Runner.kt](../android-app/app/src/validation/java/com/codex/quota/android/validation/Stage02Runner.kt) 在 `await(nodeApi.connectedNodes)` 抛出**任意**异常时直接报告 `XMS_SERVICE_UNAVAILABLE`；没有记录异常类别，也没有先检查服务是否可见。因此当前错误码语义过宽。
-2. [WearableClient.java](../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/org/zxor/oronbox/xms/internal/WearableClient.java) 的 Xiaomi backend 仅尝试 `com.mi.health`、`com.xiaomi.wearable`，使用 action `com.xiaomi.wearable.XMS_WEARABLE_SERVICE`。它在 Binder 绑定后先调用 `getConnectedNodes()` 做 readiness probe；**空 node 列表会被当作候选服务失败**，然后尝试下一个候选。
-3. 两个候选都未通过 readiness probe 时，排队的 API 调用可能收到 [ApiSupport.java](../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/org/zxor/oronbox/xms/internal/ApiSupport.java) 的 `IllegalStateException("not bond")`。它既可能来自未找到/未绑定服务，也可能来自服务返回空 node；当前 APK 将两者都改写成同一错误码。
+1. [Stage02Runner.kt](../../../android-app/app/src/validation/java/com/codex/quota/android/validation/Stage02Runner.kt) 在 `await(nodeApi.connectedNodes)` 抛出**任意**异常时直接报告 `XMS_SERVICE_UNAVAILABLE`；没有记录异常类别，也没有先检查服务是否可见。因此当前错误码语义过宽。
+2. [WearableClient.java](../../../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/org/zxor/oronbox/xms/internal/WearableClient.java) 的 Xiaomi backend 仅尝试 `com.mi.health`、`com.xiaomi.wearable`，使用 action `com.xiaomi.wearable.XMS_WEARABLE_SERVICE`。它在 Binder 绑定后先调用 `getConnectedNodes()` 做 readiness probe；**空 node 列表会被当作候选服务失败**，然后尝试下一个候选。
+3. 两个候选都未通过 readiness probe 时，排队的 API 调用可能收到 [ApiSupport.java](../../../third_party/xms_wearable_sdk_cleanroom/xms-wearable-lib/src/main/java/org/zxor/oronbox/xms/internal/ApiSupport.java) 的 `IllegalStateException("not bond")`。它既可能来自未找到/未绑定服务，也可能来自服务返回空 node；当前 APK 将两者都改写成同一错误码。
 4. 小米运动健康显示“已连接”证明其用户界面中的手环连接状态，但不能单独证明第三方 XMS Binder 服务对该 APK 可见、可绑定或返回相同 node。Probe RPK 能打开也不等于 XMS 消息链路已建立。
 
 **目前最准确的结论：CleanRoom 的 Xiaomi backend 没有向 validation APK 交付可用的 connected node；根因仍待定位。**
